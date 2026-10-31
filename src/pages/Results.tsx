@@ -10,10 +10,14 @@ import { sortSuppliers, filterSuppliersLocally, groupByIndicator } from '../util
 import { indicatorLabels } from '../utils/indicators';
 import SupplierCard from '../components/SupplierCard';
 import { useSupplierSelection } from '../hooks/useSupplierSelection';
+import type { ContatoAnterior } from '../utils/pedidos';
 
 interface ResultsProps {
   /** Suppliers to display */
   suppliers: Fornecedor[];
+
+  /** Last contact of each supplier already contacted by the team, by supplier id */
+  contatosAnteriores?: Record<string, ContatoAnterior>;
 
   /** Callback when suppliers are selected */
   onSelectSuppliers?: (selectedIds: string[]) => void;
@@ -38,6 +42,7 @@ interface ResultsProps {
  */
 export function Results({
   suppliers: initialSuppliers,
+  contatosAnteriores = {},
   onSelectSuppliers,
   groupByIndicator: shouldGroupByIndicator = false,
   allowFilter = true,
@@ -91,6 +96,7 @@ export function Results({
             supplier={supplier}
             isSelected={selection.isSelected(supplier.id)}
             onToggleSelect={handleSelectChange}
+            contatoAnterior={contatosAnteriores[supplier.id]}
           />
         ))
       )}
@@ -124,6 +130,7 @@ export function Results({
                     supplier={supplier}
                     isSelected={selection.isSelected(supplier.id)}
                     onToggleSelect={handleSelectChange}
+                    contatoAnterior={contatosAnteriores[supplier.id]}
                   />
                 ))}
               </div>

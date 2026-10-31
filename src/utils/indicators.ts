@@ -6,6 +6,31 @@
 import type { Fornecedor } from './types';
 
 /**
+ * Where a message goes for one supplier
+ */
+export interface Canais {
+  email: boolean;
+  whatsapp: boolean;
+}
+
+/**
+ * Number used to open a WhatsApp conversation, or empty without WhatsApp
+ */
+export function whatsappPhone(supplier: Fornecedor): string {
+  return supplier.whatsapp_numero || (supplier.whatsapp_link ?? '').replace(/\D/g, '');
+}
+
+/**
+ * Initial channel of a supplier: only one, so nobody is contacted twice by accident.
+ * Email comes first because it is sent by the app and recorded without another step.
+ */
+export function canaisPadrao(supplier: Fornecedor): Canais {
+  return supplier.email
+    ? { email: true, whatsapp: false }
+    : { email: false, whatsapp: !!whatsappPhone(supplier) };
+}
+
+/**
  * Indicator types representing available contact methods
  */
 export type ContactIndicator =

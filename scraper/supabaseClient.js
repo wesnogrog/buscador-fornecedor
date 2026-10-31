@@ -3,6 +3,8 @@
  * Handles saving supplier data to Supabase
  */
 
+import { classifyPhone } from './validator.js';
+
 /**
  * Gets the bare domain of a website, as the app shows and links it
  * @param {string} website - Website URL
@@ -79,6 +81,7 @@ async function saveSuppliers(supabase, suppliers, service, region) {
           email: supplier.email || null,
           whatsapp_link: supplier.whatsapp_link || null,
           whatsapp_numero: supplier.whatsapp_numero || null,
+          telefone: supplier.phone ? classifyPhone(supplier.phone).number || supplier.phone : null,
           data_extracao: new Date().toISOString(),
         };
       });

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { filterSuppliers } from '@/utils/suppliers'
+import { filterSuppliers, formatPhone, phoneHref } from '@/utils/suppliers'
 import { supabase } from '@/utils/supabase'
 import type { Fornecedor } from '@/utils/types'
 
@@ -150,7 +150,7 @@ describe('filterSuppliers', () => {
       expect(result).toEqual([])
     })
 
-    it('should handle Supabase errors gracefully', async () => {
+    it('should report a database failure instead of returning no suppliers', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
         ilike: vi.fn().mockReturnThis(),
@@ -162,9 +162,7 @@ describe('filterSuppliers', () => {
 
       vi.mocked(supabase.from).mockReturnValue(mockQuery as any)
 
-      const result = await filterSuppliers('catering', 'SP')
-
-      expect(result).toEqual([])
+      await expect(filterSuppliers('catering', 'SP')).rejects.toThrow('Database error')
     })
 
     it('should return multiple suppliers when they match', async () => {
@@ -249,5 +247,23 @@ describe('filterSuppliers', () => {
 
       expect(mockQuery.contains).toHaveBeenCalledWith('servicos', ['som & iluminação'])
     })
+  })
+})
+
+describe('formatPhone', () => {
+  it('formats landlines and mobiles with the country code', () => {
+    expect(formatPhone('551932321234')).toBe('(19) 3232-1234')
+    expect(formatPhone('5519999953561')).toBe('(19) 99995-3561')
+  })
+
+  it('keeps a number in another format as it came', () => {
+    expect(formatPhone('0800 123 4567')).toBe('0800 123 4567')
+  })
+})
+
+describe('phoneHref', () => {
+  it('adds the plus sign only to numbers with the country code', () => {
+    expect(phoneHref('551932321234')).toBe('tel:+551932321234')
+    expect(phoneHref('0800 123 4567')).toBe('tel:08001234567')
   })
 })

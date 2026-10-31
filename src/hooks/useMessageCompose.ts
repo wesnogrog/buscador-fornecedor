@@ -16,9 +16,20 @@ export function useMessageCompose(templates: Modelo[]) {
     local: '',
     prazo: '',
   });
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [generatedPreviews, setPreviews] = useState<Record<string, string>>({});
+  // Text personalized by hand per supplier. Filling the fields again does not overwrite it
+  const [edits, setEdits] = useState<Record<string, string>>({});
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+  const previews = { ...generatedPreviews, ...edits };
+
+  const editPreview = useCallback((supplierId: string, text: string) => {
+    setEdits((prev) => ({ ...prev, [supplierId]: text }));
+  }, []);
+
+  const restorePreview = useCallback((supplierId: string) => {
+    setEdits(({ [supplierId]: _removed, ...rest }) => rest);
+  }, []);
 
   const selectTemplate = useCallback((templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
@@ -26,6 +37,7 @@ export function useMessageCompose(templates: Modelo[]) {
       setSelectedTemplateId(templateId);
       // Clear previews when template changes
       setPreviews({});
+      setEdits({});
     }
   }, [templates]);
 
@@ -66,6 +78,7 @@ export function useMessageCompose(templates: Modelo[]) {
       prazo: '',
     });
     setPreviews({});
+    setEdits({});
   }, []);
 
   const validate = useCallback(() => {
@@ -90,9 +103,12 @@ export function useMessageCompose(templates: Modelo[]) {
     selectedTemplate,
     fields,
     previews,
+    edits,
     selectTemplate,
     updateField,
     generatePreview,
+    editPreview,
+    restorePreview,
     clear,
     validate,
   };

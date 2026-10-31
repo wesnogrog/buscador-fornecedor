@@ -10,6 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import { useSavedRequests } from '../hooks/useSavedRequests';
 import { formatDate, formatDateTime, formatStatus } from '../utils/pedidos';
+import { formatPhone, phoneHref } from '../utils/suppliers';
 import type { SupplierDetail } from '../utils/pedidos';
 
 export default function PedidoDetail() {
@@ -234,6 +235,15 @@ function SupplierCard({
                   className="block text-green-600 hover:text-green-700"
                 >
                   WhatsApp: {supplier.fornecedor.whatsapp_numero}
+                </a>
+              )}
+
+              {supplier.fornecedor?.telefone && (
+                <a
+                  href={phoneHref(supplier.fornecedor.telefone)}
+                  className="block text-gray-700 hover:text-gray-900"
+                >
+                  Telefone: {formatPhone(supplier.fornecedor.telefone)}
                 </a>
               )}
 

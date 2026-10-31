@@ -13,11 +13,14 @@ import {
 } from '../utils/indicators';
 import { WhatsAppButton } from './WhatsAppButton';
 import { formatSupplierMessage } from '../utils/whatsapp';
+import { formatPhone, phoneHref } from '../utils/suppliers';
+import { formatDate, type ContatoAnterior } from '../utils/pedidos';
 
 interface SupplierCardProps {
   supplier: Fornecedor;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
+  contatoAnterior?: ContatoAnterior;
 }
 
 /**
@@ -32,6 +35,7 @@ export function SupplierCard({
   supplier,
   isSelected,
   onToggleSelect,
+  contatoAnterior,
 }: SupplierCardProps) {
   const indicator = contactIndicators(supplier);
   const label = indicatorLabels[indicator];
@@ -76,6 +80,13 @@ export function SupplierCard({
             <p className="text-sm text-gray-600 mt-1">{supplier.endereco}</p>
           )}
 
+          {/* Previous contact warning */}
+          {contatoAnterior && (
+            <p className="mt-2 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              ⚠️ Já contatado em {formatDate(contatoAnterior.data)} no pedido "{contatoAnterior.pedido}"
+            </p>
+          )}
+
           {/* Contact Info Summary */}
           <div className="mt-2 flex flex-wrap gap-2 items-center">
             {/* Email */}
@@ -106,6 +117,17 @@ export function SupplierCard({
                 className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded hover:bg-green-100 transition-colors"
                 ariaLabel={`Contact ${supplier.nome} via WhatsApp`}
               />
+            )}
+
+            {/* Phone */}
+            {supplier.telefone && (
+              <a
+                href={phoneHref(supplier.telefone)}
+                className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                aria-label={`Ligar para ${supplier.nome}`}
+              >
+                ☎️ {formatPhone(supplier.telefone)}
+              </a>
             )}
           </div>
 

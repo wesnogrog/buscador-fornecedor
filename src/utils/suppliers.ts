@@ -144,6 +144,7 @@ export function getPrimaryContact(supplier: Fornecedor): {
  * @param servico - The service to search for (required)
  * @param regiao - The region to filter by (optional)
  * @returns Array of matching suppliers
+ * @throws When the search fails, so a failure is not mistaken for "no suppliers found"
  */
 export async function filterSuppliers(
   servico: string,
@@ -153,32 +154,43 @@ export async function filterSuppliers(
     return [];
   }
 
-  try {
-    const servicoNormalized = servico.trim().toLowerCase();
+  const servicoNormalized = servico.trim().toLowerCase();
 
-    let query = supabase.from('fornecedores').select('*');
+  let query = supabase.from('fornecedores').select('*');
 
-    // Filter by region if provided
-    if (regiao && regiao.trim() !== '') {
-      // "campinas" must find "Campinas"; % and _ in the text are not wildcards
-      query = query.ilike('regiao', regiao.trim().replace(/[\\%_]/g, '\\$&'));
-    }
-
-    // Filter by service (array contains)
-    query = query.contains('servicos', [servicoNormalized]);
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error filtering suppliers:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (err) {
-    console.error('Unexpected error filtering suppliers:', err);
-    return [];
+  // Filter by region if provided
+  if (regiao && regiao.trim() !== '') {
+    // "campinas" must find "Campinas"; % and _ in the text are not wildcards
+    query = query.ilike('regiao', regiao.trim().replace(/[\\%_]/g, '\\$&'));
   }
+
+  // Filter by service (array contains)
+  query = query.contains('servicos', [servicoNormalized]);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Não foi possível buscar os fornecedores: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+/**
+ * Formats a stored phone (5519...) for reading, keeping any other format as it came
+ */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '').replace(/^55/, '');
+  const match = digits.match(/^([1-9]\d)(\d{4,5})(\d{4})$/);
+  return match ? `(${match[1]}) ${match[2]}-${match[3]}` : phone;
+}
+
+/**
+ * Link that starts a call. Numbers like 0800 have no country code to add
+ */
+export function phoneHref(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.startsWith('55') ? `tel:+${digits}` : `tel:${digits}`;
 }
 
 /**

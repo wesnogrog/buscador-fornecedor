@@ -273,10 +273,11 @@ async function runScraper(service, region, options = {}) {
           }
 
           // Only a mobile number can be a probable WhatsApp, so a landline gets no WhatsApp button
-          const phoneClass = classifyPhone(enrichedSupplier.whatsapp_numero || enrichedSupplier.phone);
-          enrichedSupplier.phoneType = phoneClass.type;
-          if (phoneClass.type === 'celular') {
-            enrichedSupplier.whatsapp_numero = phoneClass.number;
+          const mobile = [enrichedSupplier.whatsapp_numero, enrichedSupplier.phone]
+            .map(classifyPhone)
+            .find((phoneClass) => phoneClass.type === 'celular');
+          if (mobile) {
+            enrichedSupplier.whatsapp_numero = mobile.number;
           } else {
             delete enrichedSupplier.whatsapp_numero;
           }

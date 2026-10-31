@@ -7,8 +7,10 @@ import { SendFlow } from '@/pages/SendFlow'
 import { WhatsAppButton } from '@/components/WhatsAppButton'
 import { supabase } from '@/utils/supabase'
 import { loadModelos } from '@/utils/modelos'
-import { addPedidoFornecedores, createPedido } from '@/utils/pedidos'
+import { addPedidoFornecedores, createPedido, loadContatosAnteriores, type ContatoAnterior } from '@/utils/pedidos'
+import { formatPhone } from '@/utils/suppliers'
 import { recordSend } from '@/utils/idempotency'
+import { whatsappPhone, type Canais } from '@/utils/indicators'
 import type { TemplateFields } from '@/utils/template'
 import type { Fornecedor, Modelo } from '@/utils/types'
 
@@ -18,15 +20,13 @@ interface Destino {
   fornecedor: Fornecedor
   pedidoFornecedorId: string
   corpo: string
-}
-
-function whatsappPhone(fornecedor: Fornecedor): string {
-  return fornecedor.whatsapp_numero || (fornecedor.whatsapp_link ?? '').replace(/\D/g, '')
+  canais: Canais
 }
 
 export function NovoPedido() {
   const [step, setStep] = useState<Step>('busca')
   const [busca, setBusca] = useState<SearchResult | null>(null)
+  const [contatosAnteriores, setContatosAnteriores] = useState<Record<string, ContatoAnterior>>({})
   const [selecionados, setSelecionados] = useState<string[]>([])
   const [modelos, setModelos] = useState<Modelo[]>([])
   const [modelo, setModelo] = useState<Modelo | null>(null)
@@ -47,10 +47,12 @@ export function NovoPedido() {
     selectedTemplate,
     fields,
     previews,
+    canais,
   }: {
     selectedTemplate: Modelo
     fields: TemplateFields
     previews: Record<string, string>
+    canais: Record<string, Canais>
   }) => {
     if (!busca) return
     setSalvando(true)
@@ -75,7 +77,12 @@ export function NovoPedido() {
         vinculos.flatMap((vinculo) => {
           const fornecedor = busca.suppliers.find((s) => s.id === vinculo.fornecedor_id)
           if (!fornecedor) return []
-          return [{ fornecedor, pedidoFornecedorId: vinculo.id, corpo: previews[fornecedor.id] ?? '' }]
+          return [{
+            fornecedor,
+            pedidoFornecedorId: vinculo.id,
+            corpo: previews[fornecedor.id] ?? '',
+            canais: canais[fornecedor.id] ?? { email: false, whatsapp: false },
+          }]
         })
       )
       setModelo(selectedTemplate)
@@ -105,8 +112,8 @@ export function NovoPedido() {
     }
   }
 
-  const porEmail = destinos.filter((d) => d.fornecedor.email)
-  const porWhatsapp = destinos.filter((d) => whatsappPhone(d.fornecedor))
+  const porEmail = destinos.filter((d) => d.fornecedor.email && d.canais.email)
+  const porWhatsapp = destinos.filter((d) => whatsappPhone(d.fornecedor) && d.canais.whatsapp)
   const semCanal = destinos.filter((d) => !d.fornecedor.email && !whatsappPhone(d.fornecedor))
 
   return (
@@ -122,6 +129,12 @@ export function NovoPedido() {
           onContinue={(resultado) => {
             setBusca(resultado)
             setStep('selecao')
+            setErro(null)
+            setContatosAnteriores({})
+            // The warning helps but does not block: the search stays usable if it fails
+            loadContatosAnteriores(supabase, resultado.suppliers.map((s) => s.id))
+              .then(setContatosAnteriores)
+              .catch((err) => setErro(`Não foi possível verificar contatos anteriores: ${err.message}`))
           }}
         />
       </div>
@@ -135,6 +148,7 @@ export function NovoPedido() {
           </div>
           <Results
             suppliers={busca.suppliers}
+            contatosAnteriores={contatosAnteriores}
             onSelectSuppliers={setSelecionados}
             onContinue={() => setStep('mensagem')}
           />
@@ -210,7 +224,11 @@ export function NovoPedido() {
 
           {semCanal.length > 0 && (
             <p className="w-full max-w-2xl mx-auto text-sm text-amber-700">
-              Sem e-mail ou WhatsApp: {semCanal.map((d) => d.fornecedor.nome).join(', ')}.
+              Sem e-mail ou WhatsApp:{' '}
+              {semCanal
+                .map((d) => (d.fornecedor.telefone ? `${d.fornecedor.nome} (ligar: ${formatPhone(d.fornecedor.telefone)})` : d.fornecedor.nome))
+                .join(', ')}
+              .
             </p>
           )}
 

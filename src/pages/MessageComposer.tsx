@@ -9,10 +9,11 @@
  * 4. User proceeds to send (Task 11)
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMessageCompose } from '../hooks/useMessageCompose';
 import { MessagePreview } from '../components/MessagePreview';
 import type { TemplateFields } from '../utils/template';
+import { canaisPadrao, whatsappPhone, type Canais } from '../utils/indicators';
 import type { Modelo, Fornecedor } from '../utils/types';
 
 interface MessageComposerProps {
@@ -24,6 +25,7 @@ interface MessageComposerProps {
     selectedTemplate: Modelo;
     fields: TemplateFields;
     previews: Record<string, string>;
+    canais: Record<string, Canais>;
   }) => void;
 }
 
@@ -35,6 +37,7 @@ export function MessageComposer({
   onProceed,
 }: MessageComposerProps): React.ReactElement {
   const messageCompose = useMessageCompose(templates);
+  const [canaisEscolhidos, setCanaisEscolhidos] = useState<Record<string, Canais>>({});
 
   // Generate previews whenever template or fields change
   useEffect(() => {
@@ -50,7 +53,29 @@ export function MessageComposer({
 
   const selectedSuppliers = suppliers.filter((s) => selectedSupplierIds.includes(s.id));
   const { missingFields } = messageCompose.validate();
-  const canProceed = messageCompose.selectedTemplate !== null && missingFields.length === 0;
+  const hasEmptyEdit = selectedSuppliers.some((s) => messageCompose.edits[s.id]?.trim() === '');
+  const canaisDe = (supplier: Fornecedor) => canaisEscolhidos[supplier.id] ?? canaisPadrao(supplier);
+  const semCanalEscolhido = selectedSuppliers.filter(
+    (s) => (s.email || whatsappPhone(s)) && !canaisDe(s).email && !canaisDe(s).whatsapp
+  );
+  const canProceed =
+    messageCompose.selectedTemplate !== null &&
+    missingFields.length === 0 &&
+    !hasEmptyEdit &&
+    semCanalEscolhido.length === 0;
+
+  // A supplier without the chosen channel keeps what it has, instead of being left with nothing
+  const escolherParaTodos = (canal: keyof Canais) => {
+    const temCanal = (s: Fornecedor) => (canal === 'email' ? !!s.email : !!whatsappPhone(s));
+    setCanaisEscolhidos((prev) => ({
+      ...prev,
+      ...Object.fromEntries(
+        selectedSuppliers
+          .filter(temCanal)
+          .map((s) => [s.id, { email: canal === 'email', whatsapp: canal === 'whatsapp' }])
+      ),
+    }));
+  };
 
   const handleProceed = () => {
     if (messageCompose.selectedTemplate) {
@@ -58,6 +83,7 @@ export function MessageComposer({
         selectedTemplate: messageCompose.selectedTemplate,
         fields: messageCompose.fields,
         previews: messageCompose.previews,
+        canais: Object.fromEntries(selectedSuppliers.map((s) => [s.id, canaisDe(s)])),
       });
     }
   };
@@ -208,6 +234,26 @@ export function MessageComposer({
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
                     Prévia da Mensagem
                   </h2>
+                  {selectedSuppliers.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-700">Enviar todos por:</span>
+                      <button
+                        type="button"
+                        onClick={() => escolherParaTodos('email')}
+                        className="px-3 py-1.5 text-sm font-medium rounded text-blue-700 bg-blue-50 hover:bg-blue-100"
+                      >
+                        E-mail
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => escolherParaTodos('whatsapp')}
+                        className="px-3 py-1.5 text-sm font-medium rounded text-green-700 bg-green-50 hover:bg-green-100"
+                      >
+                        WhatsApp
+                      </button>
+                      <span className="text-xs text-gray-500">Quem não tiver esse canal continua como está.</span>
+                    </div>
+                  )}
                 </div>
 
                 {selectedSuppliers.length > 0 ? (
@@ -215,7 +261,14 @@ export function MessageComposer({
                     <MessagePreview
                       key={supplier.id}
                       supplier={supplier}
+                      canais={canaisDe(supplier)}
+                      onCanaisChange={(canais) =>
+                        setCanaisEscolhidos((prev) => ({ ...prev, [supplier.id]: canais }))
+                      }
                       preview={messageCompose.previews[supplier.id] || ''}
+                      edited={supplier.id in messageCompose.edits}
+                      onEdit={(text) => messageCompose.editPreview(supplier.id, text)}
+                      onRestore={() => messageCompose.restorePreview(supplier.id)}
                     />
                   ))
                 ) : (
@@ -241,6 +294,22 @@ export function MessageComposer({
           <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
             <p className="text-sm text-red-800">
               <strong>Campos obrigatórios:</strong> Complete os campos: {missingFields.join(', ')}
+            </p>
+          </div>
+        )}
+
+        {semCanalEscolhido.length > 0 && (
+          <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
+            <p className="text-sm text-red-800">
+              Escolha e-mail ou WhatsApp para: {semCanalEscolhido.map((s) => s.nome).join(', ')}.
+            </p>
+          </div>
+        )}
+
+        {hasEmptyEdit && (
+          <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
+            <p className="text-sm text-red-800">
+              Uma mensagem personalizada está vazia. Escreva o texto ou volte ao texto do modelo.
             </p>
           </div>
         )}

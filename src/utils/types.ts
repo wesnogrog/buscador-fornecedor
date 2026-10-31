@@ -21,6 +21,7 @@ export interface Fornecedor {
   email?: string | null;
   whatsapp_link?: string | null;
   whatsapp_numero?: string | null;
+  telefone?: string | null;
   data_extracao: string; // ISO 8601 timestamp
   created_at: string; // ISO 8601 timestamp
   updated_at: string; // ISO 8601 timestamp

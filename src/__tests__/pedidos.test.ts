@@ -12,6 +12,7 @@ import {
   getPedidoDetail,
   markSupplierStatus,
   calculatePedidoStatus,
+  loadContatosAnteriores,
 } from '../utils/pedidos';
 
 // Mock Supabase client
@@ -277,5 +278,48 @@ describe('formatDate', () => {
 
   it('should return an empty string when there is no date', () => {
     expect(formatDate(null)).toBe('');
+  });
+});
+
+describe('loadContatosAnteriores', () => {
+  const clientWith = (result: { data: unknown; error: unknown }) => {
+    const query: any = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue(result),
+    };
+    return { client: { from: vi.fn().mockReturnValue(query) } as any, query };
+  };
+
+  it('keeps the most recent successful send of each supplier', async () => {
+    const { client, query } = clientWith({
+      data: [
+        { data_envio: '2026-10-30T10:00:00Z', pedido_fornecedores: { fornecedor_id: 'a', pedidos: { nome: 'Novo' } } },
+        { data_envio: '2026-10-01T10:00:00Z', pedido_fornecedores: { fornecedor_id: 'a', pedidos: { nome: 'Velho' } } },
+        { data_envio: '2026-10-15T10:00:00Z', pedido_fornecedores: { fornecedor_id: 'b', pedidos: { nome: 'Outro' } } },
+      ],
+      error: null,
+    });
+
+    await expect(loadContatosAnteriores(client, ['a', 'b', 'c'])).resolves.toEqual({
+      a: { data: '2026-10-30T10:00:00Z', pedido: 'Novo' },
+      b: { data: '2026-10-15T10:00:00Z', pedido: 'Outro' },
+    });
+    expect(query.eq).toHaveBeenCalledWith('status', 'sucesso');
+    expect(query.in).toHaveBeenCalledWith('pedido_fornecedores.fornecedor_id', ['a', 'b', 'c']);
+  });
+
+  it('does not query the database without suppliers', async () => {
+    const { client } = clientWith({ data: [], error: null });
+
+    await expect(loadContatosAnteriores(client, [])).resolves.toEqual({});
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('reports a database failure', async () => {
+    const { client } = clientWith({ data: null, error: { message: 'Sem acesso' } });
+
+    await expect(loadContatosAnteriores(client, ['a'])).rejects.toThrow('Sem acesso');
   });
 });

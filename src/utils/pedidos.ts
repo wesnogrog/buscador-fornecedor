@@ -169,6 +169,7 @@ export async function getPedidoDetail(
       nome,
       email,
       whatsapp_numero,
+      telefone,
       endereco,
       servicos,
       dominio
@@ -257,6 +258,47 @@ export async function addPedidoFornecedores(
   }
 
   return (data ?? []) as PedidoFornecedor[];
+}
+
+export interface ContatoAnterior {
+  data: string;
+  pedido: string;
+}
+
+/**
+ * Finds the last successful send to each supplier, in any pedido of the team
+ * @returns Last contact by supplier id; suppliers never contacted are absent
+ */
+export async function loadContatosAnteriores(
+  client: SupabaseClient<Database>,
+  fornecedorIds: string[]
+): Promise<Record<string, ContatoAnterior>> {
+  if (fornecedorIds.length === 0) return {};
+
+  const { data, error } = await client
+    .from('envios')
+    .select('data_envio, pedido_fornecedores!inner(fornecedor_id, pedidos(nome))')
+    .eq('status', 'sucesso')
+    .in('pedido_fornecedores.fornecedor_id', fornecedorIds)
+    .order('data_envio', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const contatos: Record<string, ContatoAnterior> = {};
+  const envios = (data ?? []) as unknown as Array<{
+    data_envio: string;
+    pedido_fornecedores: { fornecedor_id: string; pedidos: { nome: string } | null };
+  }>;
+  for (const envio of envios) {
+    const vinculo = envio.pedido_fornecedores;
+    // Sorted from newest to oldest, so the first one found is the last contact
+    if (!contatos[vinculo.fornecedor_id]) {
+      contatos[vinculo.fornecedor_id] = { data: envio.data_envio, pedido: vinculo.pedidos?.nome ?? '' };
+    }
+  }
+  return contatos;
 }
 
 /**
