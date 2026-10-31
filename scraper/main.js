@@ -175,6 +175,9 @@ async function runScraper(service, region, options = {}) {
         // Handle Google blocking
         if (error.message && error.message.includes('blocked')) {
           log(`[ERROR] Google Maps blocked: ${error.message}`);
+          if (browser) {
+            await browser.close();
+          }
           return {
             status: 'blocked',
             saved: 0,
@@ -184,10 +187,6 @@ async function runScraper(service, region, options = {}) {
           };
         }
         throw error;
-      } finally {
-        if (browser) {
-          await browser.close();
-        }
       }
     }
 
@@ -207,40 +206,76 @@ async function runScraper(service, region, options = {}) {
     const enriched = [];
     let extractionErrors = 0;
 
-    for (const supplier of suppliers) {
-      try {
-        const contacts = isMock
-          ? await extractContacts(getMockHtml(supplier.name))
-          : await extractContacts(supplier.website || '');
+    try {
+      for (const supplier of suppliers) {
+        try {
+          let html;
 
-        // Merge supplier with extracted contacts
-        const enrichedSupplier = { ...supplier, ...contacts };
+          if (isMock) {
+            // Use mock HTML for testing
+            html = getMockHtml(supplier.name);
+          } else {
+            // Fetch HTML from supplier website using browser
+            if (!supplier.website) {
+              log(`[WARN] No website URL for ${supplier.name}, skipping contact extraction`);
+              enriched.push(supplier);
+              continue;
+            }
 
-        // Validate email if present
-        if (enrichedSupplier.email) {
-          const isValid = await validateEmail(enrichedSupplier.email);
-          enrichedSupplier.emailValid = isValid;
-          log(`[INFO] Email ${enrichedSupplier.email}: ${isValid ? 'valid' : 'invalid'}`);
-        }
-
-        // Classify phone if present
-        if (enrichedSupplier.phone || enrichedSupplier.whatsapp_numero) {
-          const phoneNumber = enrichedSupplier.whatsapp_numero || enrichedSupplier.phone;
-          const phoneClass = classifyPhone(phoneNumber);
-          enrichedSupplier.phoneType = phoneClass.type;
-          if (phoneClass.number) {
-            enrichedSupplier.whatsapp_numero = phoneClass.number;
+            try {
+              const page = await browser.newPage();
+              try {
+                // Fetch with 10 second timeout
+                await page.goto(supplier.website, { waitUntil: 'networkidle0', timeout: 10000 });
+                html = await page.content();
+              } finally {
+                await page.close();
+              }
+            } catch (fetchError) {
+              // Handle fetch failures gracefully
+              log(`[WARN] Failed to fetch website for ${supplier.name}: ${fetchError.message}`);
+              enriched.push(supplier);
+              continue;
+            }
           }
-          log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || 'N/A'}`);
-        } else {
-          log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}`);
-        }
 
-        enriched.push(enrichedSupplier);
-      } catch (error) {
-        // Log error but continue processing other suppliers
-        log(`[WARN] Failed to process ${supplier.name}: ${error.message}`);
-        extractionErrors++;
+          // Extract contacts from HTML
+          const contacts = await extractContacts(html);
+
+          // Merge supplier with extracted contacts
+          const enrichedSupplier = { ...supplier, ...contacts };
+
+          // Validate email if present
+          if (enrichedSupplier.email) {
+            const isValid = await validateEmail(enrichedSupplier.email);
+            enrichedSupplier.emailValid = isValid;
+            log(`[INFO] Email ${enrichedSupplier.email}: ${isValid ? 'valid' : 'invalid'}`);
+          }
+
+          // Classify phone if present
+          if (enrichedSupplier.phone || enrichedSupplier.whatsapp_numero) {
+            const phoneNumber = enrichedSupplier.whatsapp_numero || enrichedSupplier.phone;
+            const phoneClass = classifyPhone(phoneNumber);
+            enrichedSupplier.phoneType = phoneClass.type;
+            if (phoneClass.number) {
+              enrichedSupplier.whatsapp_numero = phoneClass.number;
+            }
+            log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || 'N/A'}`);
+          } else {
+            log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}`);
+          }
+
+          enriched.push(enrichedSupplier);
+        } catch (error) {
+          // Log error but continue processing other suppliers
+          log(`[WARN] Failed to process ${supplier.name}: ${error.message}`);
+          extractionErrors++;
+        }
+      }
+    } finally {
+      // Close browser after enrichment is complete
+      if (browser && !isMock) {
+        await browser.close();
       }
     }
 
