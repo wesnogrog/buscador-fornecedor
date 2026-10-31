@@ -1,0 +1,80 @@
+/**
+ * Hook for managing message composition state
+ * Handles template selection, field updates, and preview generation
+ */
+
+import { useState, useCallback } from 'react';
+import { fillTemplate, type TemplateFields } from '../utils/template';
+import type { Modelo } from '../utils/types';
+
+export function useMessageCompose(templates: Modelo[]) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [fields, setFields] = useState<TemplateFields>({
+    servico: '',
+    evento: '',
+    data: '',
+    local: '',
+    prazo: '',
+  });
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+
+  const selectTemplate = useCallback((templateId: string) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (template) {
+      setSelectedTemplateId(templateId);
+      // Clear previews when template changes
+      setPreviews({});
+    }
+  }, [templates]);
+
+  const updateField = useCallback((fieldName: keyof TemplateFields, value: string) => {
+    setFields((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
+    // Clear previews when field changes
+    setPreviews({});
+  }, []);
+
+  const generatePreview = useCallback(
+    (supplierId: string, supplierName: string) => {
+      if (!selectedTemplate) return;
+
+      const fieldsWithSupplier: TemplateFields = {
+        ...fields,
+        fornecedor: supplierName,
+      };
+
+      const preview = fillTemplate(selectedTemplate.corpo, fieldsWithSupplier);
+      setPreviews((prev) => ({
+        ...prev,
+        [supplierId]: preview,
+      }));
+    },
+    [selectedTemplate, fields]
+  );
+
+  const clear = useCallback(() => {
+    setSelectedTemplateId(null);
+    setFields({
+      servico: '',
+      evento: '',
+      data: '',
+      local: '',
+      prazo: '',
+    });
+    setPreviews({});
+  }, []);
+
+  return {
+    selectedTemplate,
+    fields,
+    previews,
+    selectTemplate,
+    updateField,
+    generatePreview,
+    clear,
+  };
+}
