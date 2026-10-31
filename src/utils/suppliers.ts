@@ -154,20 +154,12 @@ export async function filterSuppliers(
     return [];
   }
 
-  const servicoNormalized = servico.trim().toLowerCase();
-
-  let query = supabase.from('fornecedores').select('*');
-
-  // Filter by region if provided
-  if (regiao && regiao.trim() !== '') {
-    // "campinas" must find "Campinas"; % and _ in the text are not wildcards
-    query = query.ilike('regiao', regiao.trim().replace(/[\\%_]/g, '\\$&'));
-  }
-
-  // Filter by service (array contains)
-  query = query.contains('servicos', [servicoNormalized]);
-
-  const { data, error } = await query;
+  // The database ignores case and accents and matches part of the text:
+  // "som" finds "locação de som" and "niteroi" finds "Niterói"
+  const { data, error } = await supabase.rpc('buscar_fornecedores', {
+    p_servico: servico.trim(),
+    p_regiao: regiao?.trim() || null,
+  });
 
   if (error) {
     throw new Error(`Não foi possível buscar os fornecedores: ${error.message}`);

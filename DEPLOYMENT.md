@@ -74,7 +74,12 @@ Paste `supabase/tests/rls_comportamento.test.sql` into the Supabase SQL Editor a
 
 ## Step 4: Finding Suppliers
 
-The scraper runs on a PC with Google Chrome, not on the site. See `scraper/README.md`.
+When a search finds nothing, the **Buscar no Google Maps** button calls the `request-collection` function, which starts the `Scraper` workflow on GitHub Actions. It allows 20 collections in 24 hours. Two secrets connect them:
+
+- In GitHub > **Settings** > **Secrets and variables** > **Actions**: `SUPABASE_SERVICE_KEY`, the Supabase secret key.
+- In Supabase > **Edge Functions** > **Secrets**: `GITHUB_DISPATCH_TOKEN`, a GitHub fine-grained token limited to this repository, with the **Actions: Read and write** permission. It expires, so renew it before the date chosen on GitHub.
+
+The scraper also runs on a PC with Google Chrome, useful if Google blocks GitHub's servers. See `scraper/README.md`.
 
 ```bash
 cd scraper
@@ -98,4 +103,7 @@ node main.js "buffet" "Campinas"
 | Login returns to the wrong address | Supabase > **URL Configuration** |
 | Email error "OAuth client was not found" | `GOOGLE_CLIENT_ID` secret in Supabase |
 | Email error "client secret is invalid" | `GOOGLE_CLIENT_SECRET` secret in Supabase |
-| Search finds nothing | The scraper has not run for that service and region |
+| Search finds nothing | Use **Buscar no Google Maps** on the site |
+| Collection does not start | `GITHUB_DISPATCH_TOKEN` secret in Supabase, which may have expired |
+| Collection fails right away | GitHub > **Actions** > **Scraper**, and the `SUPABASE_SERVICE_KEY` secret on GitHub |
+| "O Google bloqueou a coleta" | Wait a few hours, or run the scraper on a PC |

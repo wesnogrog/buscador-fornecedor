@@ -106,6 +106,8 @@ async function runScraper(service, region, options = {}) {
       options.onLog(message);
     }
   };
+  // Logs on GitHub are public, so contact details stay out of them there
+  const logContact = options.hideContacts ? () => {} : log;
 
   try {
     // Validate inputs
@@ -176,12 +178,12 @@ async function runScraper(service, region, options = {}) {
         suppliers = await searchSuppliers(browser, service, region);
         log(`[INFO] Found ${suppliers.length} suppliers`);
       } catch (error) {
+        if (browser) {
+          await browser.close();
+        }
         // Handle Google blocking
         if (error.message && error.message.includes('blocked')) {
           log(`[ERROR] Google Maps blocked: ${error.message}`);
-          if (browser) {
-            await browser.close();
-          }
           return {
             status: 'blocked',
             saved: 0,
@@ -195,6 +197,9 @@ async function runScraper(service, region, options = {}) {
     }
 
     if (suppliers.length === 0) {
+      if (browser) {
+        await browser.close();
+      }
       log('[WARN] No suppliers found');
       return {
         status: 'success',
@@ -266,7 +271,7 @@ async function runScraper(service, region, options = {}) {
           // Invalid emails are discarded, so the app never offers them
           if (enrichedSupplier.email) {
             const isValid = await validateEmail(enrichedSupplier.email);
-            log(`[INFO] Email ${enrichedSupplier.email}: ${isValid ? 'valid' : 'invalid'}`);
+            logContact(`[INFO] Email ${enrichedSupplier.email}: ${isValid ? 'valid' : 'invalid'}`);
             if (!isValid) {
               delete enrichedSupplier.email;
             }
@@ -281,7 +286,7 @@ async function runScraper(service, region, options = {}) {
           } else {
             delete enrichedSupplier.whatsapp_numero;
           }
-          log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || enrichedSupplier.whatsapp_link || 'N/A'}`);
+          logContact(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || enrichedSupplier.whatsapp_link || 'N/A'}`);
 
           enriched.push(enrichedSupplier);
         } catch (error) {

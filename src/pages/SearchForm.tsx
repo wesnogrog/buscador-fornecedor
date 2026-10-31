@@ -7,6 +7,7 @@
 
 import React from 'react'
 import { useSearchForm } from '@/hooks/useSearchForm'
+import { ColetaPanel } from '@/components/ColetaPanel'
 import { contactIndicators, indicatorLabels, indicatorIcons, indicatorColors } from '@/utils/indicators'
 import type { Fornecedor } from '@/utils/types'
 
@@ -230,10 +231,12 @@ export function SearchForm({ onContinue }: SearchFormProps = {}): JSX.Element {
               Ainda não temos fornecedores salvos para "<strong>{form.searchedFor.servico}</strong>"
               {form.searchedFor.regiao && ` na região "${form.searchedFor.regiao}"`}.
             </p>
-            <p className="text-sm text-yellow-700 mt-2">
-              Esta busca só mostra fornecedores já coletados do Google Maps. Tente outro termo ou peça a
-              coleta desse serviço e região.
-            </p>
+            <ColetaPanel
+              key={`${form.searchedFor.servico}|${form.searchedFor.regiao}`}
+              servico={form.searchedFor.servico}
+              regiao={form.searchedFor.regiao}
+              onFound={() => form.search()}
+            />
           </div>
         )}
       </div>

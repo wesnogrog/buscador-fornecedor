@@ -58,6 +58,10 @@ async function runTests() {
     console.log('\n--- Running Integration Tests ---');
     await import('./tests/integration.test.js');
 
+    // Run collection queue tests
+    console.log('\n--- Running Collection Tests ---');
+    await import('./tests/coletar.test.js');
+
     // Wait for all pending async tests
     await Promise.all(pendingTests);
 

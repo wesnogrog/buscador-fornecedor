@@ -22,6 +22,8 @@ BEGIN
   INSERT INTO fornecedores (nome) VALUES ('Fornecedor Teste') RETURNING id INTO fornecedor;
   INSERT INTO fornecedores (nome) VALUES ('Outro Fornecedor Teste') RETURNING id INTO outro_fornecedor;
   INSERT INTO credenciais_gmail (usuario_id, credencial_criptografada) VALUES (ana, '\x00');
+  INSERT INTO fornecedores (nome, servicos, regiao) VALUES ('Busca Teste', ARRAY['locação de som'], 'Niterói');
+  INSERT INTO coletas (servico, regiao, criado_por) VALUES ('teste', 'Teste', ana);
 
   -- Not logged in
   PERFORM set_config('request.jwt.claims', '', true);
@@ -30,12 +32,20 @@ BEGIN
   IF total <> 0 THEN RAISE EXCEPTION 'Anônimo não pode ler fornecedores'; END IF;
   SELECT count(*) INTO total FROM credenciais_gmail;
   IF total <> 0 THEN RAISE EXCEPTION 'Anônimo não pode ler credenciais'; END IF;
+  SELECT count(*) INTO total FROM coletas;
+  IF total <> 0 THEN RAISE EXCEPTION 'Anônimo não pode ler coletas'; END IF;
+  SELECT count(*) INTO total FROM buscar_fornecedores('som', 'niteroi');
+  IF total <> 0 THEN RAISE EXCEPTION 'Anônimo não pode buscar fornecedores'; END IF;
 
   -- Logged in with another domain
   PERFORM set_config('request.jwt.claims', json_build_object('sub', externo, 'email', 'externo.teste@gmail.com')::text, true);
   PERFORM set_config('role', 'authenticated', true);
   SELECT count(*) INTO total FROM fornecedores;
   IF total <> 0 THEN RAISE EXCEPTION 'Outro domínio não pode ler fornecedores'; END IF;
+  SELECT count(*) INTO total FROM coletas;
+  IF total <> 0 THEN RAISE EXCEPTION 'Outro domínio não pode ler coletas'; END IF;
+  SELECT count(*) INTO total FROM buscar_fornecedores('som', 'niteroi');
+  IF total <> 0 THEN RAISE EXCEPTION 'Outro domínio não pode buscar fornecedores'; END IF;
   bloqueado := false;
   BEGIN
     INSERT INTO pedidos (nome, servico, regiao, autor_id) VALUES ('X', 'som', 'SP', externo);
@@ -47,6 +57,29 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', ana, 'email', 'ana.teste@agenciasurto.com')::text, true);
   SELECT count(*) INTO total FROM fornecedores WHERE id = fornecedor;
   IF total <> 1 THEN RAISE EXCEPTION 'Equipe precisa ler fornecedores'; END IF;
+
+  -- Flexible search
+  SELECT count(*) INTO total FROM buscar_fornecedores('som', 'niteroi') WHERE nome = 'Busca Teste';
+  IF total <> 1 THEN RAISE EXCEPTION 'A busca precisa ignorar acento e aceitar parte do texto'; END IF;
+  SELECT count(*) INTO total FROM buscar_fornecedores('LOCACAO', NULL) WHERE nome = 'Busca Teste';
+  IF total <> 1 THEN RAISE EXCEPTION 'A busca sem região precisa ignorar maiúsculas e acento'; END IF;
+  SELECT count(*) INTO total FROM buscar_fornecedores('%', NULL) WHERE nome = 'Busca Teste';
+  IF total <> 0 THEN RAISE EXCEPTION 'O símbolo de porcentagem não pode trazer todos os fornecedores'; END IF;
+  SELECT count(*) INTO total FROM buscar_fornecedores('som', 'Campinas') WHERE nome = 'Busca Teste';
+  IF total <> 0 THEN RAISE EXCEPTION 'A busca precisa respeitar a região'; END IF;
+
+  -- Collections: the team reads, and only the function writes
+  SELECT count(*) INTO total FROM coletas WHERE servico = 'teste';
+  IF total <> 1 THEN RAISE EXCEPTION 'Equipe precisa ver as coletas'; END IF;
+  bloqueado := false;
+  BEGIN
+    INSERT INTO coletas (servico, regiao, criado_por) VALUES ('direto', 'Teste', ana);
+  EXCEPTION WHEN insufficient_privilege THEN bloqueado := true;
+  END;
+  IF NOT bloqueado THEN RAISE EXCEPTION 'Ninguém pode criar coleta sem passar pela função'; END IF;
+  UPDATE coletas SET status = 'concluida' WHERE servico = 'teste';
+  GET DIAGNOSTICS total = ROW_COUNT;
+  IF total <> 0 THEN RAISE EXCEPTION 'Equipe não pode alterar coletas'; END IF;
 
   bloqueado := false;
   BEGIN

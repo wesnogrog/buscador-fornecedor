@@ -421,3 +421,6 @@ verify_jwt = false
 
 [functions.save-gmail-credential]
 verify_jwt = false
+
+[functions.request-collection]
+verify_jwt = false
