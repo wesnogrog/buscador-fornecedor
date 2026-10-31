@@ -160,7 +160,8 @@ export async function filterSuppliers(
 
     // Filter by region if provided
     if (regiao && regiao.trim() !== '') {
-      query = query.eq('regiao', regiao.trim());
+      // "campinas" must find "Campinas"; % and _ in the text are not wildcards
+      query = query.ilike('regiao', regiao.trim().replace(/[\\%_]/g, '\\$&'));
     }
 
     // Filter by service (array contains)

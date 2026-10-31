@@ -78,7 +78,7 @@ describe('filterSuppliers', () => {
     it('should return suppliers matching service and region', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [mockSuppliers[0]], error: null }),
       }
 
@@ -88,7 +88,7 @@ describe('filterSuppliers', () => {
 
       expect(supabase.from).toHaveBeenCalledWith('fornecedores')
       expect(mockQuery.select).toHaveBeenCalled()
-      expect(mockQuery.eq).toHaveBeenCalledWith('regiao', 'SP')
+      expect(mockQuery.ilike).toHaveBeenCalledWith('regiao', 'SP')
       expect(mockQuery.contains).toHaveBeenCalledWith('servicos', ['catering'])
       expect(result).toEqual([mockSuppliers[0]])
     })
@@ -96,7 +96,7 @@ describe('filterSuppliers', () => {
     it('should filter by service with case-insensitive matching', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [mockSuppliers[0]], error: null }),
       }
 
@@ -108,10 +108,24 @@ describe('filterSuppliers', () => {
       expect(mockQuery.contains).toHaveBeenCalledWith('servicos', ['catering'])
     })
 
-    it('should normalize region to exact match', async () => {
+    it('should escape wildcards in the region', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
+        contains: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }
+
+      vi.mocked(supabase.from).mockReturnValue(mockQuery as any)
+
+      await filterSuppliers('catering', 'São%Paulo')
+
+      expect(mockQuery.ilike).toHaveBeenCalledWith('regiao', 'São\\%Paulo')
+    })
+
+    it('should match the region ignoring case', async () => {
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [mockSuppliers[2]], error: null }),
       }
 
@@ -119,13 +133,13 @@ describe('filterSuppliers', () => {
 
       await filterSuppliers('catering', 'Campinas')
 
-      expect(mockQuery.eq).toHaveBeenCalledWith('regiao', 'Campinas')
+      expect(mockQuery.ilike).toHaveBeenCalledWith('regiao', 'Campinas')
     })
 
     it('should return empty array when no suppliers match', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [], error: null }),
       }
 
@@ -139,7 +153,7 @@ describe('filterSuppliers', () => {
     it('should handle Supabase errors gracefully', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({
           data: null,
           error: new Error('Database error'),
@@ -156,7 +170,7 @@ describe('filterSuppliers', () => {
     it('should return multiple suppliers when they match', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({
           data: [mockSuppliers[0], mockSuppliers[1]],
           error: null,
@@ -196,7 +210,7 @@ describe('filterSuppliers', () => {
     it('should trim whitespace from service and region', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [], error: null }),
       }
 
@@ -204,7 +218,7 @@ describe('filterSuppliers', () => {
 
       await filterSuppliers('  catering  ', '  SP  ')
 
-      expect(mockQuery.eq).toHaveBeenCalledWith('regiao', 'SP')
+      expect(mockQuery.ilike).toHaveBeenCalledWith('regiao', 'SP')
       expect(mockQuery.contains).toHaveBeenCalledWith('servicos', ['catering'])
     })
 
@@ -225,7 +239,7 @@ describe('filterSuppliers', () => {
     it('should handle special characters in service names', async () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
         contains: vi.fn().mockResolvedValue({ data: [], error: null }),
       }
 

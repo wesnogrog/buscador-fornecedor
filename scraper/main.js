@@ -13,6 +13,7 @@
  */
 
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
 
@@ -24,9 +25,9 @@ import { saveSuppliers } from './supabaseClient.js';
 
 const {
   SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  SERVICE = process.argv[2],
-  REGION = process.argv[3],
+  SUPABASE_SERVICE_KEY,
+  SERVICE,
+  REGION,
   HEADLESS = 'true',
   DELAY_MIN_MS = 2000,
   DELAY_MAX_MS = 5000,
@@ -129,6 +130,8 @@ async function runScraper(service, region, options = {}) {
     let suppliers;
     let browser;
 
+    log('[INFO] Searching Google Maps...');
+
     if (isMock) {
       // Use mock data
       log('[INFO] Using mock data for testing');
@@ -159,7 +162,9 @@ async function runScraper(service, region, options = {}) {
       // Real Google Maps search
       try {
         browser = await puppeteer.launch({
-          headless: HEADLESS === 'true',
+          // Uses the Chrome already installed on the PC
+          channel: 'chrome',
+          headless: HEADLESS === 'true' ? 'new' : false,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -168,7 +173,6 @@ async function runScraper(service, region, options = {}) {
           ],
         });
 
-        log('[INFO] Searching Google Maps...');
         suppliers = await searchSuppliers(browser, service, region);
         log(`[INFO] Found ${suppliers.length} suppliers`);
       } catch (error) {
@@ -218,24 +222,38 @@ async function runScraper(service, region, options = {}) {
             // Fetch HTML from supplier website using browser
             if (!supplier.website) {
               log(`[WARN] No website URL for ${supplier.name}, skipping contact extraction`);
-              enriched.push(supplier);
-              continue;
-            }
-
-            try {
-              const page = await browser.newPage();
+            } else {
               try {
-                // Fetch with 10 second timeout
-                await page.goto(supplier.website, { waitUntil: 'networkidle0', timeout: 10000 });
-                html = await page.content();
-              } finally {
-                await page.close();
+                const page = await browser.newPage();
+                try {
+                  // Fetch with 10 second timeout. Many sites never go network idle
+                  await page.goto(supplier.website, { waitUntil: 'domcontentloaded', timeout: 10000 });
+                  html = await page.content();
+
+                  // Reads at most three pages per site: the home page and two contact pages
+                  const contactLinks = await page.$$eval('a[href]', (links) => [...new Set(
+                    links
+                      .filter((link) => /contat|fale|contact/i.test(`${link.textContent} ${link.href}`)
+                        && link.hostname === location.hostname
+                        && /^https?:$/.test(link.protocol))
+                      .map((link) => link.href.split('#')[0])
+                  )].filter((href) => href !== location.href).slice(0, 2));
+
+                  for (const contactLink of contactLinks) {
+                    try {
+                      await page.goto(contactLink, { waitUntil: 'domcontentloaded', timeout: 10000 });
+                      html += await page.content();
+                    } catch (contactError) {
+                      log(`[WARN] Failed to fetch contact page for ${supplier.name}: ${contactError.message}`);
+                    }
+                  }
+                } finally {
+                  await page.close();
+                }
+              } catch (fetchError) {
+                // Handle fetch failures gracefully, keeping the phone from Google Maps
+                log(`[WARN] Failed to fetch website for ${supplier.name}: ${fetchError.message}`);
               }
-            } catch (fetchError) {
-              // Handle fetch failures gracefully
-              log(`[WARN] Failed to fetch website for ${supplier.name}: ${fetchError.message}`);
-              enriched.push(supplier);
-              continue;
             }
           }
 
@@ -245,25 +263,24 @@ async function runScraper(service, region, options = {}) {
           // Merge supplier with extracted contacts
           const enrichedSupplier = { ...supplier, ...contacts };
 
-          // Validate email if present
+          // Invalid emails are discarded, so the app never offers them
           if (enrichedSupplier.email) {
             const isValid = await validateEmail(enrichedSupplier.email);
-            enrichedSupplier.emailValid = isValid;
             log(`[INFO] Email ${enrichedSupplier.email}: ${isValid ? 'valid' : 'invalid'}`);
+            if (!isValid) {
+              delete enrichedSupplier.email;
+            }
           }
 
-          // Classify phone if present
-          if (enrichedSupplier.phone || enrichedSupplier.whatsapp_numero) {
-            const phoneNumber = enrichedSupplier.whatsapp_numero || enrichedSupplier.phone;
-            const phoneClass = classifyPhone(phoneNumber);
-            enrichedSupplier.phoneType = phoneClass.type;
-            if (phoneClass.number) {
-              enrichedSupplier.whatsapp_numero = phoneClass.number;
-            }
-            log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || 'N/A'}`);
+          // Only a mobile number can be a probable WhatsApp, so a landline gets no WhatsApp button
+          const phoneClass = classifyPhone(enrichedSupplier.whatsapp_numero || enrichedSupplier.phone);
+          enrichedSupplier.phoneType = phoneClass.type;
+          if (phoneClass.type === 'celular') {
+            enrichedSupplier.whatsapp_numero = phoneClass.number;
           } else {
-            log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}`);
+            delete enrichedSupplier.whatsapp_numero;
           }
+          log(`[INFO] Extracted contacts: ${enrichedSupplier.name}, email=${enrichedSupplier.email || 'N/A'}, whatsapp=${enrichedSupplier.whatsapp_numero || enrichedSupplier.whatsapp_link || 'N/A'}`);
 
           enriched.push(enrichedSupplier);
         } catch (error) {
@@ -290,6 +307,17 @@ async function runScraper(service, region, options = {}) {
       };
     }
 
+    if (options.dryRun) {
+      log('[INFO] Dry run: nothing was saved');
+      return {
+        status: 'success',
+        saved: 0,
+        errors: extractionErrors,
+        duration: Date.now() - startTime,
+        message: `Found ${enriched.length} suppliers`,
+      };
+    }
+
     // Save to Supabase
     log('[INFO] Saving to Supabase...');
 
@@ -297,20 +325,22 @@ async function runScraper(service, region, options = {}) {
     let saveErrors = 0;
 
     if (!isMock) {
-      // Real Supabase save
-      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      // Real Supabase save. Only the secret key can write suppliers, which RLS closes to everyone else
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         log('[ERROR] Supabase credentials not configured');
         return {
           status: 'error',
           saved: 0,
           errors: enriched.length,
           duration: Date.now() - startTime,
-          message: 'Supabase credentials not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY.',
+          message: 'Supabase credentials not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY.',
         };
       }
 
       try {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+          auth: { persistSession: false },
+        });
         const result = await saveSuppliers(supabase, enriched, service, region);
         saved = result.saved;
         saveErrors = result.errors;
@@ -331,7 +361,7 @@ async function runScraper(service, region, options = {}) {
     log(`[INFO] Completed in ${Date.now() - startTime}ms`);
 
     return {
-      status: 'success',
+      status: saved === 0 && saveErrors > 0 ? 'error' : 'success',
       saved,
       errors: totalErrors,
       duration: Date.now() - startTime,
@@ -353,17 +383,20 @@ async function runScraper(service, region, options = {}) {
  * Main CLI entry point
  */
 async function main() {
-  const service = process.argv[2] || SERVICE;
-  const region = process.argv[3] || REGION;
+  const args = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
+  const service = args[0] || SERVICE;
+  const region = args[1] || REGION;
   const mockFlag = process.argv.includes('--mock');
+  const dryRun = process.argv.includes('--dry-run');
 
   if (!service || !region) {
     console.log(`
-Usage: node main.js <SERVICE> <REGION> [--mock]
+Usage: node main.js <SERVICE> <REGION> [--mock] [--dry-run]
 
 Examples:
   node main.js "catering" "São Paulo"
   node main.js "electrician" "Brasília" --mock
+  node main.js "catering" "São Paulo" --dry-run   (searches without saving)
 
 Or set SERVICE and REGION in .env file.
 
@@ -371,13 +404,14 @@ Environment Variables:
   SERVICE: Service type to search
   REGION: Geographic region
   SUPABASE_URL: Supabase project URL
-  SUPABASE_ANON_KEY: Supabase anon key
+  SUPABASE_SERVICE_KEY: Supabase secret key. Keep it only in the .env file of this PC
+  MAX_RESULTS: Maximum suppliers per search (default: 20)
     `);
     process.exit(1);
   }
 
   try {
-    const result = await runScraper(service, region, { mock: mockFlag });
+    const result = await runScraper(service, region, { mock: mockFlag, dryRun });
 
     // Exit with proper code
     if (result.status === 'success') {
@@ -392,7 +426,7 @@ Environment Variables:
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(console.error);
 }
 

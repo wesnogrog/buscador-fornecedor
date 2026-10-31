@@ -25,6 +25,7 @@ While this project does use Chromium (via Puppeteer), it is unavoidable for scra
 
 ### Prerequisites
 - Node.js 16+ installed
+- Google Chrome installed (the scraper uses the PC's own Chrome)
 - `.env` file configured with Supabase credentials
 
 ### Installation
@@ -33,7 +34,7 @@ While this project does use Chromium (via Puppeteer), it is unavoidable for scra
 cd scraper
 npm install
 cp .env.example .env
-# Edit .env with your Supabase URL and anon key
+# Edit .env with your Supabase URL and secret key
 ```
 
 ### Environment Variables
@@ -41,7 +42,8 @@ cp .env.example .env
 | Variable | Required | Example | Description |
 |----------|----------|---------|-------------|
 | `SUPABASE_URL` | Yes | `https://project.supabase.co` | Your Supabase project URL |
-| `SUPABASE_ANON_KEY` | Yes | `eyJ...` | Your Supabase anonymous key |
+| `SUPABASE_SERVICE_KEY` | Yes | `sb_secret_...` | Your Supabase secret key. RLS blocks every other key from writing suppliers. Keep it only in this PC's `.env` |
+| `MAX_RESULTS` | No | `20` | Maximum suppliers per search (default: 20) |
 | `SERVICE` | Yes | `plumber` | Type of business to search |
 | `REGION` | Yes | `São Paulo` | Geographic region/city |
 | `HEADLESS` | No | `true` | Run browser in headless mode (default: true) |
@@ -60,6 +62,11 @@ npm start
 ```bash
 npm start "electrician" "Brasília"
 node main.js "plumber" "São Paulo"
+```
+
+### Search without saving
+```bash
+node main.js "plumber" "São Paulo" --dry-run
 ```
 
 ### Development mode (auto-reload)

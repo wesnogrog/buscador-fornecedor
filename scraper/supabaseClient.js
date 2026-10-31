@@ -4,6 +4,20 @@
  */
 
 /**
+ * Gets the bare domain of a website, as the app shows and links it
+ * @param {string} website - Website URL
+ * @returns {string|null} - Domain without "www." or null
+ */
+function toDomain(website) {
+  if (!website) return null;
+  try {
+    return new URL(website).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Saves suppliers to Supabase fornecedores table
  * Implements upsert logic to prevent duplicates
  * @param {object} supabase - Supabase client instance
@@ -22,29 +36,54 @@ async function saveSuppliers(supabase, suppliers, service, region) {
   }
 
   const BATCH_SIZE = 10;
+  // The app searches services in lowercase
+  const normalizedService = service.trim().toLowerCase();
+  const normalizedRegion = region.trim();
   let totalSaved = 0;
   let totalErrors = 0;
 
-  // Process suppliers in batches
-  for (let i = 0; i < suppliers.length; i += BATCH_SIZE) {
-    const batch = suppliers.slice(i, i + BATCH_SIZE);
+  // The same place can appear twice, and one upsert cannot touch a row twice
+  const unique = [...new Map(
+    suppliers.map(supplier => [`${supplier.name}|${supplier.address || ''}`, supplier])
+  ).values()];
 
-    // Transform suppliers to match database schema
-    const transformed = batch.map(supplier => ({
-      nome: supplier.name || 'Unknown',
-      endereco: supplier.address || '',
-      servicos: [service], // Array with search service
-      regiao: region,
-      email: supplier.email || null,
-      whatsapp_link: supplier.whatsapp_link || null,
-      whatsapp_numero: supplier.whatsapp_numero || null,
-      website: supplier.website || null,
-      telefone: supplier.phone || null,
-      data_extracao: new Date().toISOString(),
-    }));
+  // Process suppliers in batches
+  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
+    const batch = unique.slice(i, i + BATCH_SIZE);
 
     try {
-      const { data, error } = await supabase
+      // Keep the services a supplier already has when it is found by another search
+      const { data: existing, error: readError } = await supabase
+        .from('fornecedores')
+        .select('nome, endereco, servicos')
+        .eq('regiao', normalizedRegion)
+        .in('nome', batch.map(supplier => supplier.name || 'Unknown'));
+
+      if (readError) {
+        console.error('[ERROR] Batch read failed:', readError.message);
+        totalErrors += batch.length;
+        continue;
+      }
+
+      // Transform suppliers to match database schema
+      const transformed = batch.map(supplier => {
+        const nome = supplier.name || 'Unknown';
+        const endereco = supplier.address || '';
+        const previous = (existing || []).find(row => row.nome === nome && row.endereco === endereco);
+        return {
+          nome,
+          dominio: toDomain(supplier.website),
+          endereco,
+          servicos: [...new Set([...(previous?.servicos || []), normalizedService])],
+          regiao: normalizedRegion,
+          email: supplier.email || null,
+          whatsapp_link: supplier.whatsapp_link || null,
+          whatsapp_numero: supplier.whatsapp_numero || null,
+          data_extracao: new Date().toISOString(),
+        };
+      });
+
+      const { error } = await supabase
         .from('fornecedores')
         .upsert(transformed, {
           onConflict: 'nome,regiao,endereco', // Composite unique key
@@ -69,4 +108,4 @@ async function saveSuppliers(supabase, suppliers, service, region) {
   };
 }
 
-export { saveSuppliers };
+export { saveSuppliers, toDomain };

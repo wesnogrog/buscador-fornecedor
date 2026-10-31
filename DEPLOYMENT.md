@@ -163,7 +163,7 @@ Login and Gmail sending go through Supabase Auth, so the app has no Google varia
 
 ### 4.1 Create the Google OAuth client
 
-1. In Google Cloud Console, create a project. No billing account is needed.
+1. In Google Cloud Console, create a project and enable the **Gmail API**. No billing account is needed.
 2. Configure the OAuth consent screen as **Internal** and add the scope `https://www.googleapis.com/auth/gmail.send`.
 3. Create an OAuth client of type **Web application**.
 4. Add this authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`.

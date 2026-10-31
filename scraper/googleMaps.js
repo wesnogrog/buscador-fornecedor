@@ -1,144 +1,154 @@
 /**
  * Google Maps Supplier Search Module
  * Searches Google Maps for suppliers matching a service and region
- * Extracts up to 60 results with name, address, phone, website
+ * Opens each place to read name, address, phone and website
  */
 
 import { randomDelay } from './main.js';
+
+const LOAD_TIMEOUT_MS = 30000;
+const PLACE_TIMEOUT_MS = 15000;
+const MAX_SCROLLS = 8;
+
+/**
+ * Keeps only public HTTP(S) addresses, so a listing cannot send the scraper to this PC or its network
+ * @param {string} url - Website address from the listing
+ * @returns {string|undefined} - The address, or undefined if it is not public
+ */
+function toPublicWebsite(url) {
+  try {
+    const parsed = new URL(url);
+    // Maps can wrap the real address in a redirect
+    const target = parsed.hostname.endsWith('google.com') && parsed.searchParams.get('q')
+      ? new URL(parsed.searchParams.get('q'))
+      : parsed;
+    const isPrivate = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[)/i.test(target.hostname);
+    return ['http:', 'https:'].includes(target.protocol) && !isPrivate ? target.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Throws if Google refused the request
+ * @param {Page} page - Puppeteer page
+ */
+async function assertNotBlocked(page) {
+  const content = await page.content();
+  if (page.url().includes('/sorry/') ||
+      content.includes('We detected unusual activity') ||
+      content.includes('detectamos tráfego incomum')) {
+    throw new Error('Google has detected unusual activity and blocked the request (429).');
+  }
+}
+
+/**
+ * Accepts the cookie screen Google shows in some regions
+ * @param {Page} page - Puppeteer page
+ */
+async function dismissConsent(page) {
+  if (!page.url().includes('consent.google')) return;
+  const button = await page.$('form[action*="consent"] button');
+  if (button) {
+    await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), button.click()]);
+  }
+}
+
+/**
+ * Reads one place from its Google Maps page
+ * @param {Page} page - Puppeteer page already on the place
+ * @returns {Promise<object|null>} - RawSupplier or null without a name
+ */
+async function readPlace(page) {
+  const place = await page.evaluate(() => {
+    const heading = [...document.querySelectorAll('h1')].find((el) => el.textContent.trim());
+    const address = document.querySelector('button[data-item-id="address"]');
+    const phone = document.querySelector('button[data-item-id^="phone:tel:"]');
+    const website = document.querySelector('a[data-item-id="authority"]');
+    return {
+      name: heading?.textContent.trim() || '',
+      address: address?.getAttribute('aria-label')?.replace(/^[^:]*:\s*/, '').trim() || '',
+      phone: phone?.getAttribute('data-item-id').replace('phone:tel:', '') || undefined,
+      website: website?.getAttribute('href') || undefined,
+    };
+  });
+
+  if (!place.name) return null;
+  return { ...place, website: place.website ? toPublicWebsite(place.website) : undefined };
+}
 
 /**
  * Search Google Maps for suppliers
  * @param {Browser} browser - Puppeteer browser instance
  * @param {string} service - Service type (e.g., "plumber", "catering")
  * @param {string} region - Geographic region (e.g., "São Paulo", "Campinas")
+ * @param {number} maxResults - Maximum suppliers to read
  * @returns {Promise<Array>} Array of RawSupplier objects {name, address, phone?, website?}
  * @throws {Error} If Google blocks the request (403, 429) or other critical errors
  */
-async function searchSuppliers(browser, service, region) {
+async function searchSuppliers(browser, service, region, maxResults = parseInt(process.env.MAX_RESULTS || '20', 10)) {
   const page = await browser.newPage();
   const suppliers = [];
-  let currentPage = 1;
-  const maxPages = 3; // ~20 results per page, 3 pages = ~60 results
 
   try {
-    // Set up error handling for network issues
     page.on('error', (err) => {
       console.error('[ERROR] Page error:', err.message);
     });
 
-    // Navigate to Google Maps search
-    const searchQuery = `${service} in ${region}`;
-    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+    const searchQuery = `${service} em ${region}`;
+    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}?hl=pt-BR`;
 
     console.log(`[INFO] Navigating to Google Maps: ${mapsUrl}`);
+    await page.goto(mapsUrl, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT_MS });
+    await dismissConsent(page);
+    await assertNotBlocked(page);
 
-    try {
-      await page.goto(mapsUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    } catch (err) {
-      if (err.message.includes('ERR_BLOCKED_BY_ADMIN') ||
-          err.message.includes('ERR_BLOCKED_BY_CLIENT') ||
-          err.message.includes('net::ERR_BLOCKED_BY_RESPONSE')) {
-        throw new Error('Google has blocked this IP. Please try again later or use a proxy.');
-      }
-      throw err;
+    // A search shows a list; a search with one match goes straight to the place
+    await page.waitForSelector('[role="feed"], button[data-item-id="address"]', { timeout: LOAD_TIMEOUT_MS });
+
+    if (!(await page.$('[role="feed"]'))) {
+      const place = await readPlace(page);
+      return place ? [place] : [];
     }
 
-    // Check for blocking (Google shows specific error messages)
-    const pageContent = await page.content();
-    if (pageContent.includes('We detected unusual activity') ||
-        pageContent.includes('Please try again later')) {
-      throw new Error('Google has detected unusual activity and blocked the request (429).');
-    }
+    // The list only loads more results as it scrolls
+    const listLinks = () => page.$$eval('[role="feed"] a[href*="/maps/place/"]', (links) =>
+      [...new Set(links.map((link) => link.href))]
+    );
 
-    // Extract supplier listings from current page
-    const extractSuppliers = async () => {
-      return await page.evaluate(() => {
-        const results = [];
-        // Google Maps supplier listings have specific selectors
-        const listings = document.querySelectorAll('[data-item-id]');
-
-        listings.forEach((listing) => {
-          try {
-            // Name is usually in the first text element
-            const nameEl = listing.querySelector('h3, [role="heading"]');
-            const name = nameEl ? nameEl.textContent.trim() : '';
-
-            // Address is typically in a subtitle or secondary element
-            const addressEl = listing.querySelector('[aria-label*="address"], .directions, .address');
-            const address = addressEl ? addressEl.textContent.trim() : '';
-
-            // Phone and website may be in the listing or require clicking
-            const phoneEl = listing.querySelector('[aria-label*="phone"], .phone');
-            const phone = phoneEl ? phoneEl.textContent.trim() : undefined;
-
-            const websiteEl = listing.querySelector('[aria-label*="website"], a[href*="http"]');
-            const website = websiteEl ? websiteEl.getAttribute('href') : undefined;
-
-            if (name && address) {
-              results.push({
-                name,
-                address,
-                phone: phone || undefined,
-                website: website || undefined,
-              });
-            }
-          } catch (e) {
-            // Skip this listing on extraction error
-            console.warn('[WARN] Failed to extract listing:', e.message);
-          }
-        });
-
-        return results;
+    let links = await listLinks();
+    for (let scroll = 0; scroll < MAX_SCROLLS && links.length < maxResults; scroll++) {
+      await page.evaluate(() => {
+        const feed = document.querySelector('[role="feed"]');
+        feed.scrollTop = feed.scrollHeight;
       });
-    };
+      await randomDelay();
+      const loaded = await listLinks();
+      if (loaded.length === links.length) break;
+      links = loaded;
+    }
+    links = links.slice(0, maxResults);
+    console.log(`[INFO] Found ${links.length} places in the list`);
 
-    // Attempt to extract suppliers from first page
-    let pageSuppliers = await extractSuppliers();
-    suppliers.push(...pageSuppliers);
-    console.log(`[INFO] Page ${currentPage}: Extracted ${pageSuppliers.length} suppliers`);
-
-    // Try to load more pages (click "Load more" or scroll)
-    currentPage++;
-    while (currentPage <= maxPages && suppliers.length < 60) {
+    for (const link of links) {
+      await randomDelay();
       try {
-        // Try to find and click the "Load more" button
-        const loadMoreButton = await page.$('[aria-label="Load more results"]');
-
-        if (loadMoreButton) {
-          console.log(`[INFO] Clicking "Load more" for page ${currentPage}...`);
-          await loadMoreButton.click();
-          // Wait for new results to load
-          await randomDelay();
-        } else {
-          // Alternative: scroll to load more
-          console.log(`[INFO] Scrolling to load more results...`);
-          await page.evaluate(() => {
-            const resultsContainer = document.querySelector('[role="region"]');
-            if (resultsContainer) {
-              resultsContainer.scrollTop = resultsContainer.scrollHeight;
-            }
-          });
-          await randomDelay();
+        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT_MS });
+        await assertNotBlocked(page);
+        await page.waitForSelector('button[data-item-id="address"], a[data-item-id="authority"], button[data-item-id^="phone:tel:"]', { timeout: PLACE_TIMEOUT_MS });
+        const place = await readPlace(page);
+        if (place) {
+          suppliers.push(place);
+          console.log(`[INFO] ${suppliers.length}/${links.length}: ${place.name}`);
         }
-
-        // Extract suppliers from this page
-        pageSuppliers = await extractSuppliers();
-        const newSuppliers = pageSuppliers.filter(
-          (supplier) => !suppliers.some((s) => s.name === supplier.name && s.address === supplier.address)
-        );
-        suppliers.push(...newSuppliers);
-        console.log(`[INFO] Page ${currentPage}: Extracted ${newSuppliers.length} new suppliers (total: ${suppliers.length})`);
-
-        currentPage++;
       } catch (err) {
-        console.warn(`[WARN] Failed to load page ${currentPage}:`, err.message);
-        break;
+        if (err.message.includes('blocked')) throw err;
+        console.warn(`[WARN] Failed to read a place: ${err.message}`);
       }
     }
 
     console.log(`[INFO] Extracted total ${suppliers.length} suppliers`);
     return suppliers;
-
   } catch (error) {
     if (error.message.includes('blocked') || error.message.includes('429') || error.message.includes('403')) {
       throw error; // Re-throw blocking errors
@@ -150,4 +160,4 @@ async function searchSuppliers(browser, service, region) {
   }
 }
 
-export { searchSuppliers };
+export { searchSuppliers, toPublicWebsite };

@@ -38,10 +38,13 @@ function extractEmail(html) {
     return null;
   }
 
-  // Filter out noreply, test, fake, example emails
+  // Filter out noreply, test, fake, example emails, and text that only looks like an email,
+  // such as image names (logo@2x.png) and package versions (wix-fonts@1.14.0)
   const validEmail = matches.find(email => {
     const lower = email.toLowerCase();
-    return !lower.includes('noreply') &&
+    return /\.[a-z]{2,}$/.test(lower) &&
+           !/\.(png|jpe?g|gif|svg|webp|css|js)$/.test(lower) &&
+           !lower.includes('noreply') &&
            !lower.includes('no-reply') &&
            !lower.startsWith('test@') &&
            !lower.startsWith('fake@') &&
