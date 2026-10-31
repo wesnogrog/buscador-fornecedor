@@ -1,6 +1,6 @@
 name = "buscador-fornecedor"
 type = "javascript"
-account_id = ""
+# account_id = ""  # Set your Cloudflare account ID here
 workers_dev = true
 main = "src/index.ts"
 compatibility_date = "2024-10-31"
@@ -16,15 +16,14 @@ vars = { ENVIRONMENT = "development" }
 [env.production]
 vars = { ENVIRONMENT = "production" }
 
-# Routes and redirects
-[[routes]]
-pattern = "example.com/*"
-zone_name = "example.com"
+# Routes configuration
+# Add your custom routes here if needed
+# Example:
+# [[routes]]
+# pattern = "yourdomain.com/*"
+# zone_name = "yourdomain.com"
 
-# SPA routing: all 404s redirect to index.html for React Router
-[[routes]]
-pattern = "*"
-custom_domain = false
+# SPA routing: handled by _redirects file for Cloudflare Pages
 
 # Build configuration
 [build]
