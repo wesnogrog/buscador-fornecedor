@@ -39,10 +39,6 @@ export function SupplierCard({
   const colors = indicatorColors[indicator];
   const icon = indicatorIcons[indicator];
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onToggleSelect(supplier.id);
-  };
-
   return (
     <div className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
       <div className="flex items-start gap-4">
@@ -51,7 +47,7 @@ export function SupplierCard({
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={handleCheckboxChange}
+            onChange={() => onToggleSelect(supplier.id)}
             className="w-5 h-5 text-blue-600 rounded cursor-pointer"
             aria-label={`Select ${supplier.nome}`}
           />
@@ -103,7 +99,7 @@ export function SupplierCard({
                 message={formatSupplierMessage(
                   supplier.nome,
                   supplier.servicos?.[0] || 'serviço',
-                  supplier.regiao
+                  supplier.regiao ?? undefined
                 )}
                 supplierName={supplier.nome}
                 label="WhatsApp 💬"

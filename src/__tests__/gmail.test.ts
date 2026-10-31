@@ -5,11 +5,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sendEmail, createEmailMessage } from '../utils/gmail';
-import { createClient } from '@supabase/supabase-js';
 
 // Mock Supabase client
+const mockSupabase = vi.hoisted(() => ({
+  from: vi.fn(),
+  auth: { getUser: vi.fn() },
+  functions: { invoke: vi.fn() },
+}));
+
+// createClient runs at module load, so the client must exist before beforeEach
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
+  createClient: vi.fn(() => mockSupabase),
 }));
 
 // Mock Gmail API client
@@ -31,21 +37,13 @@ vi.mock('googleapis', () => ({
 }));
 
 describe('Gmail API', () => {
-  let mockSupabase: any;
-  let mockAuth: any;
-
   beforeEach(() => {
-    mockSupabase = {
-      from: vi.fn(),
-      auth: {
-        getUser: vi.fn(),
-      },
-      functions: {
-        invoke: vi.fn(),
-      },
-    };
-
-    vi.mocked(createClient).mockReturnValue(mockSupabase);
+    mockSupabase.from = vi.fn();
+    mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+      error: null,
+    });
+    mockSupabase.functions.invoke = vi.fn();
   });
 
   describe('createEmailMessage', () => {
@@ -97,6 +95,37 @@ describe('Gmail API', () => {
 
       expect(message.subject).toContain('€50');
       expect(message.body).toContain('R$');
+    });
+
+    it('should encode accents without Buffer, as a browser would', () => {
+      vi.stubGlobal('Buffer', undefined);
+      try {
+        const message = createEmailMessage({
+          to: 'test@example.com',
+          subject: 'Pedido de Orçamento',
+          body: 'Olá, São Paulo',
+        });
+
+        const raw = atob(message.encoded!.replace(/-/g, '+').replace(/_/g, '/'));
+        expect(raw).toContain('Content-Type: text/plain; charset="UTF-8"');
+        expect(raw).toContain(`Subject: =?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode('Pedido de Orçamento')))}?=`);
+
+        const body = raw.split('\r\n\r\n')[1];
+        const bytes = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
+        expect(new TextDecoder().decode(bytes)).toBe('Olá, São Paulo');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should reject line breaks in the subject', () => {
+      expect(() =>
+        createEmailMessage({
+          to: 'test@example.com',
+          subject: 'Oi\r\nBcc: alguem@example.com',
+          body: 'Test',
+        })
+      ).toThrow('line breaks');
     });
 
     it('should validate email recipient format', () => {
@@ -242,10 +271,12 @@ describe('Gmail API', () => {
       expect(invokeFunc).toHaveBeenCalledWith(
         'send-email',
         expect.objectContaining({
-          to: 'test@example.com',
-          subject: 'Test Subject',
-          supplierId: 'supplier-123',
-          pedidoId: 'pedido-456',
+          body: expect.objectContaining({
+            to: 'test@example.com',
+            subject: 'Test Subject',
+            supplierId: 'supplier-123',
+            pedidoId: 'pedido-456',
+          }),
         })
       );
     });

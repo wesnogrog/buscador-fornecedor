@@ -1,16 +1,13 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, NavLink } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { useAuth } from '@/hooks/useAuth'
 import { Login } from '@/pages/Login'
 import { NovoPedido } from '@/pages/NovoPedido'
-import { Resultados } from '@/pages/Resultados'
-import { Mensagem } from '@/pages/Mensagem'
-import { Envio } from '@/pages/Envio'
 import SavedRequests from '@/pages/SavedRequests'
 import PedidoDetail from '@/pages/PedidoDetail'
 
 function AppContent() {
-  const { user, loading } = useAuth()
+  const { user, loading, logout } = useAuth()
 
   if (loading) {
     return (
@@ -27,14 +24,19 @@ function AppContent() {
     return <Login />
   }
 
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    `text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-600 hover:text-gray-900'}`
+
   return (
     <Router>
+      <nav className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center gap-4">
+        <span className="font-semibold text-gray-900">Buscador de Fornecedor</span>
+        <NavLink to="/" end className={linkClass}>Novo pedido</NavLink>
+        <NavLink to="/pedidos" className={linkClass}>Pedidos</NavLink>
+        <button onClick={logout} className="ml-auto text-sm text-gray-600 hover:text-gray-900">Sair</button>
+      </nav>
       <Routes>
         <Route path="/" element={<NovoPedido />} />
-        <Route path="/novo-pedido" element={<NovoPedido />} />
-        <Route path="/resultados" element={<Resultados />} />
-        <Route path="/mensagem" element={<Mensagem />} />
-        <Route path="/envio" element={<Envio />} />
         <Route path="/pedidos" element={<SavedRequests />} />
         <Route path="/pedido/:pedidoId" element={<PedidoDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,24 +5,32 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkIdempotency, recordSend } from '../utils/idempotency';
-import { createClient } from '@supabase/supabase-js';
 
 // Mock Supabase client
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
+const mockSupabase = vi.hoisted(() => ({
+  from: vi.fn(),
+  auth: { getUser: vi.fn() },
+  functions: { invoke: vi.fn() },
 }));
 
-describe('Idempotency', () => {
-  let mockSupabase: any;
+// createClient runs at module load, so the client must exist before beforeEach
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => mockSupabase),
+}));
 
+const insertReturning = (result: unknown) =>
+  vi.fn(() => ({
+    select: () => ({ single: () => Promise.resolve(result) }),
+  }));
+
+describe('Idempotency', () => {
   beforeEach(() => {
-    mockSupabase = {
-      from: vi.fn(),
-      auth: {
-        getUser: vi.fn(),
-      },
-    };
-    vi.mocked(createClient).mockReturnValue(mockSupabase);
+    mockSupabase.from = vi.fn();
+    mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+      error: null,
+    });
+    mockSupabase.functions.invoke = vi.fn();
   });
 
   describe('checkIdempotency', () => {
@@ -90,6 +98,21 @@ describe('Idempotency', () => {
       );
     });
 
+    it('should only look for successful sends, from any team member', async () => {
+      const eq = vi.fn().mockReturnThis();
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq,
+          single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
+        }),
+      });
+
+      await checkIdempotency('s1', 'p1');
+
+      expect(eq).toHaveBeenCalledWith('status', 'sucesso');
+      expect(eq).not.toHaveBeenCalledWith('criado_por', expect.anything());
+    });
+
     it('should handle missing credentials gracefully', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: null },
@@ -119,7 +142,7 @@ describe('Idempotency', () => {
       };
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockResolvedValue(mockInsert),
+        insert: insertReturning(mockInsert),
       });
 
       mockSupabase.auth.getUser.mockResolvedValue({
@@ -151,7 +174,7 @@ describe('Idempotency', () => {
       };
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockResolvedValue(mockInsert),
+        insert: insertReturning(mockInsert),
       });
 
       mockSupabase.auth.getUser.mockResolvedValue({
@@ -179,7 +202,7 @@ describe('Idempotency', () => {
       };
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockResolvedValue(mockInsert),
+        insert: insertReturning(mockInsert),
       });
 
       mockSupabase.auth.getUser.mockResolvedValue({
@@ -198,16 +221,58 @@ describe('Idempotency', () => {
       ).rejects.toThrow('Unique constraint violation');
     });
 
+    it('should give failed sends a separate key so a retry is not blocked', async () => {
+      const insert = vi.fn((data) =>
+        insertReturning({ data: { id: 'envio', ...data }, error: null })()
+      );
+      mockSupabase.from.mockReturnValue({ insert });
+
+      const base = {
+        pedidoFornecedorId: 'pf-1',
+        supplierId: 's1',
+        pedidoId: 'p1',
+        message: 'Test',
+      };
+      await recordSend({ ...base, status: 'falhou', errorMessage: 'x' });
+      await recordSend({ ...base, status: 'falhou', errorMessage: 'x' });
+      await recordSend({ ...base, status: 'sucesso' });
+
+      const keys = insert.mock.calls.map(([row]) => row.chave_idempotencia);
+      expect(keys[0]).toMatch(/^s1_p1_falhou_/);
+      expect(keys[1]).not.toBe(keys[0]);
+      expect(keys[2]).toBe('s1_p1');
+    });
+
+    it('should keep WhatsApp separate from email for the same supplier', async () => {
+      const insert = vi.fn((data) =>
+        insertReturning({ data: { id: 'envio', ...data }, error: null })()
+      );
+      mockSupabase.from.mockReturnValue({ insert });
+
+      await recordSend({
+        pedidoFornecedorId: 'pf-1',
+        supplierId: 's1',
+        pedidoId: 'p1',
+        message: 'Test',
+        status: 'sucesso',
+        canal: 'whatsapp',
+      });
+
+      const row = (insert.mock.calls[0] as any[])[0];
+      expect(row.canal).toBe('whatsapp');
+      expect(row.chave_idempotencia).toBe('s1_p1_whatsapp');
+    });
+
     it('should create correct idempotency key format', async () => {
       let insertedData: any = null;
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockImplementation((data) => {
+        insert: vi.fn((data) => {
           insertedData = data;
-          return Promise.resolve({
+          return insertReturning({
             data: { id: 'envio-123', ...data },
             error: null,
-          });
+          })();
         }),
       });
 

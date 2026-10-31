@@ -201,6 +201,64 @@ export async function getPedidoDetail(
   } as PedidoDetailType;
 }
 
+export interface NovoPedidoInput {
+  nome: string;
+  servico: string;
+  regiao: string;
+  data?: string | null;
+  local?: string | null;
+  prazo?: string | null;
+}
+
+export async function createPedido(
+  client: SupabaseClient<Database>,
+  input: NovoPedidoInput
+): Promise<Pedido> {
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error(userError?.message || 'User not authenticated');
+  }
+
+  const { data, error } = await client
+    .from('pedidos')
+    .insert({ ...input, autor_id: user.id })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create pedido: ${error.message}`);
+  }
+
+  return data as Pedido;
+}
+
+/**
+ * Link suppliers to a pedido. Suppliers already linked keep their current status.
+ */
+export async function addPedidoFornecedores(
+  client: SupabaseClient<Database>,
+  pedidoId: string,
+  fornecedorIds: string[]
+): Promise<PedidoFornecedor[]> {
+  const { data, error } = await client
+    .from('pedido_fornecedores')
+    .upsert(
+      fornecedorIds.map((fornecedor_id) => ({ pedido_id: pedidoId, fornecedor_id })),
+      { onConflict: 'pedido_id,fornecedor_id' }
+    )
+    .select('*');
+
+  if (error) {
+    throw new Error(`Failed to link suppliers: ${error.message}`);
+  }
+
+  return (data ?? []) as PedidoFornecedor[];
+}
+
 /**
  * Update supplier status (pendente, enviado, nao_contatar)
  * Allows marking suppliers as contacted or do-not-contact
@@ -234,7 +292,10 @@ export async function markSupplierStatus(
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return '';
 
-  const date = new Date(dateString);
+  // Date-only values parse as UTC midnight, which renders as the previous day in Brazil
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
+    ? new Date(`${dateString}T00:00:00`)
+    : new Date(dateString);
   const intl = new Intl.DateTimeFormat('pt-BR', {
     year: 'numeric',
     month: 'long',

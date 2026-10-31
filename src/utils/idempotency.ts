@@ -43,12 +43,12 @@ export async function checkIdempotency(
 
   const idempotencyKey = createIdempotencyKey(supplierId, pedidoId);
 
-  // Query the envios table for any record with this idempotency key
+  // Only a successful send blocks: a failed attempt must stay retryable
   const { data, error } = await supabase
     .from('envios')
-    .select('id, status, data_envio', { count: 'exact' })
+    .select('id, status, data_envio')
     .eq('chave_idempotencia', idempotencyKey)
-    .eq('criado_por', user.id)
+    .eq('status', 'sucesso')
     .single();
 
   if (error) {
@@ -74,6 +74,7 @@ export interface RecordSendInput {
   message: string;
   status: 'sucesso' | 'falhou' | 'pendente';
   errorMessage?: string;
+  canal?: 'email' | 'whatsapp';
 }
 
 export async function recordSend(input: RecordSendInput): Promise<Envio> {
@@ -87,14 +88,19 @@ export async function recordSend(input: RecordSendInput): Promise<Envio> {
     throw new Error(userError?.message || 'User not authenticated');
   }
 
-  const idempotencyKey = createIdempotencyKey(input.supplierId, input.pedidoId);
+  const canal = input.canal ?? 'email';
+  const baseKey = createIdempotencyKey(input.supplierId, input.pedidoId);
+  const channelKey = canal === 'email' ? baseKey : `${baseKey}_${canal}`;
+  // The column is UNIQUE: failures get their own key so they stay in the history and allow a retry
+  const idempotencyKey =
+    input.status === 'falhou' ? `${channelKey}_falhou_${crypto.randomUUID()}` : channelKey;
 
   // Insert the envio record
   const { data, error } = await supabase
     .from('envios')
     .insert({
       pedido_fornecedor_id: input.pedidoFornecedorId,
-      canal: 'email',
+      canal,
       status: input.status,
       mensagem: input.message,
       data_envio: new Date().toISOString(),

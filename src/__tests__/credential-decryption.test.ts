@@ -3,7 +3,12 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { decryptCredential, toBytes } from '../../supabase/functions/send-email/crypto';
+import {
+  decryptCredential,
+  encryptCredential,
+  toBytes,
+  toPostgresHex,
+} from '../../supabase/functions/send-email/crypto';
 
 const KEY = 'test-encryption-key';
 const CREDENTIAL = {
@@ -147,5 +152,19 @@ describe('Edge Function credential flow (decrypt -> OAuth refresh)', () => {
     const encrypted = await encrypt(CREDENTIAL, 'other-key');
     await expect(refresh(encrypted, 1000)).rejects.toThrow(/Failed to decrypt/);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('encryptCredential', () => {
+  const credential = { refresh_token: 'token', client_id: 'id', client_secret: 'secret' };
+
+  it('round-trips through the hex format stored in BYTEA columns', async () => {
+    const encrypted = await encryptCredential(credential, 'chave');
+    await expect(decryptCredential(toPostgresHex(encrypted), 'chave')).resolves.toEqual(credential);
+  });
+
+  it('does not decrypt with another key', async () => {
+    const encrypted = await encryptCredential(credential, 'chave');
+    await expect(decryptCredential(encrypted, 'outra')).rejects.toThrow('Failed to decrypt');
   });
 });

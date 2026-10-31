@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { formatDate } from '../utils/pedidos';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../utils/types';
 import {
@@ -43,10 +44,10 @@ describe('pedidos utility functions', () => {
         },
       ];
 
-      const mockSelect = vi.fn().mockResolvedValue({
-        data: mockPedidos,
-        error: null,
-      });
+      const mockSelect = vi.fn(() => ({
+        order: vi.fn().mockResolvedValue({ data: mockPedidos, error: null }),
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }));
 
       const mockFrom = vi.fn(() => ({
         select: mockSelect,
@@ -71,10 +72,9 @@ describe('pedidos utility functions', () => {
 
     it('should handle error when fetching pedidos', async () => {
       const mockError = new Error('Database error');
-      const mockSelect = vi.fn().mockResolvedValue({
-        data: null,
-        error: mockError,
-      });
+      const mockSelect = vi.fn(() => ({
+        order: vi.fn().mockResolvedValue({ data: null, error: mockError }),
+      }));
 
       const mockFrom = vi.fn(() => ({
         select: mockSelect,
@@ -267,5 +267,15 @@ describe('pedidos utility functions', () => {
       const status = calculatePedidoStatus(suppliers);
       expect(status).toBe('nenhum_contato');
     });
+  });
+});
+
+describe('formatDate', () => {
+  it('should keep the calendar day of date-only values', () => {
+    expect(formatDate('2026-11-15')).toBe('15 de novembro de 2026');
+  });
+
+  it('should return an empty string when there is no date', () => {
+    expect(formatDate(null)).toBe('');
   });
 });

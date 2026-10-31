@@ -221,7 +221,7 @@ describe('Results Component', () => {
     fireEvent.click(groupedButton);
 
     // Should now show grouped view with section headers
-    expect(screen.getByText(/Email verificado/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Email verificado \(1\)/ })).toBeInTheDocument();
   });
 
   test('displays selection count in header', async () => {
@@ -267,11 +267,10 @@ describe('Results Component', () => {
     const names = screen.getAllByRole('checkbox');
     expect(names.length).toBe(3);
 
-    // Filter to suppliers with "a" in name
+    // Only Apple and Banana contain "l" in their name or domain
     const searchInput = screen.getByPlaceholderText('Digite para filtrar...');
-    await user.type(searchInput, 'a');
+    await user.type(searchInput, 'l');
 
-    // Should show Apple and Banana (both have 'a'), but order should be preserved
     expect(screen.getByText('Apple Phone')).toBeInTheDocument();
     expect(screen.getByText('Banana Email')).toBeInTheDocument();
     expect(screen.queryByText('Cherry WhatsApp')).not.toBeInTheDocument();

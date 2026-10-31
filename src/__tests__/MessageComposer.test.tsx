@@ -137,7 +137,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     // Should show fields: servico, evento, data, local, prazo
     expect(screen.getByLabelText(/Serviço/i)).toBeInTheDocument();
@@ -160,7 +160,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     const servicoInput = screen.getByLabelText(/Serviço/i);
     await userEvent.type(servicoInput, 'Locação de Som');
@@ -185,13 +185,13 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     const servicoInput = screen.getByLabelText(/Serviço/i);
     await userEvent.type(servicoInput, 'Catering');
 
     await waitFor(() => {
-      expect(screen.getByText(/Catering/)).toBeInTheDocument();
+      expect(screen.getByText(/Fornecedor A, gostaria de um orçamento para Catering/)).toBeInTheDocument();
     });
   });
 
@@ -243,7 +243,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     // template-1 requires {servico}, which is still empty
     const proceedButton = screen.getByRole('button', { name: /Prosseguir|Próximo|Enviar/i });
@@ -271,7 +271,7 @@ describe('MessageComposer', () => {
     // No message before a template is selected
     expect(screen.queryByText(/Campos obrigatórios/i)).not.toBeInTheDocument();
 
-    await userEvent.selectOption(screen.getByRole('combobox'), 'template-2');
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'template-2');
 
     const message = screen.getByText(/Campos obrigatórios/i).closest('p');
     expect(message).toHaveTextContent('servico, evento, data');
@@ -299,7 +299,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     const servicoInput = screen.getByLabelText(/Serviço/i);
     await userEvent.type(servicoInput, 'Som');
@@ -359,7 +359,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     // Should show previews even with empty fields
     await waitFor(() => {
@@ -381,7 +381,7 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     await waitFor(() => {
       expect(screen.getByText('Fornecedor A')).toBeInTheDocument();
@@ -402,14 +402,14 @@ describe('MessageComposer', () => {
     );
 
     const dropdown = screen.getByRole('combobox');
-    await userEvent.selectOption(dropdown, 'template-1');
+    await userEvent.selectOptions(dropdown, 'template-1');
 
     const servicoInput = screen.getByLabelText(/Serviço/i) as HTMLInputElement;
     await userEvent.type(servicoInput, 'Som');
 
     const initialValue = servicoInput.value;
 
-    await userEvent.selectOption(dropdown, 'template-2');
+    await userEvent.selectOptions(dropdown, 'template-2');
 
     // The component behavior regarding field preservation might vary
     // This test documents the expected behavior

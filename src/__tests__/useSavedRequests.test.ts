@@ -61,14 +61,14 @@ describe('useSavedRequests hook', () => {
     vi.clearAllMocks();
   });
 
-  it('should initialize with default state', () => {
+  it('should initialize with default state', async () => {
     const mockSupabase = {} as any;
     vi.mocked(pedidosModule.listPedidos).mockResolvedValue([]);
 
     const { result } = renderHook(() => useSavedRequests(mockSupabase));
 
     expect(result.current.list).toEqual([]);
-    expect(result.current.loading).toBe(false);
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeNull();
   });
 

@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { sendEmail, SendEmailInput, SendEmailResult } from '../utils/gmail';
+import { sendEmail } from '../utils/gmail';
 import { checkIdempotency, recordSend } from '../utils/idempotency';
 
 export interface SendEmailHookState {
@@ -20,6 +20,14 @@ export interface SendEmailHookState {
   errors: string[];
   successCount: number;
   failedCount: number;
+  failedSupplierIds: string[];
+}
+
+export interface SendBatchResult {
+  successCount: number;
+  failedCount: number;
+  errors: string[];
+  failedSupplierIds: string[];
 }
 
 export interface EmailToSend {
@@ -28,10 +36,13 @@ export interface EmailToSend {
   pedidoId: string;
   pedidoFornecedorId?: string;
   message: string;
+  subject?: string;
+  /** Stored in envios instead of the final text, which stays only in the sender's Gmail */
+  auditMessage?: string;
 }
 
 export interface UseSendEmailReturn extends SendEmailHookState {
-  sendBatch: (emails: EmailToSend[]) => Promise<void>;
+  sendBatch: (emails: EmailToSend[]) => Promise<SendBatchResult>;
   clearErrors: () => void;
   resetProgress: () => void;
   enableRetry: () => void;
@@ -49,6 +60,7 @@ export function useSendEmail(): UseSendEmailReturn {
   const [errors, setErrors] = useState<string[]>([]);
   const [successCount, setSuccessCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  const [failedSupplierIds, setFailedSupplierIds] = useState<string[]>([]);
 
   const clearErrors = useCallback(() => {
     setErrors([]);
@@ -69,105 +81,90 @@ export function useSendEmail(): UseSendEmailReturn {
   }, []);
 
   const sendBatch = useCallback(
-    async (emails: EmailToSend[]): Promise<void> => {
-      // Clear previous errors and reset progress
+    async (emails: EmailToSend[]): Promise<SendBatchResult> => {
       clearErrors();
       resetProgress();
+      setFailedSupplierIds([]);
+      setCanRetry(false);
 
-      // Initialize progress
       setProgress({
         total: emails.length,
         sent: 0,
         failed: 0,
       });
 
-      // Start sending
       setIsSending(true);
       const newErrors: string[] = [];
+      const retryableIds: string[] = [];
       let sentCount = 0;
-      let failedCount = 0;
+      let failed = 0;
 
       for (const email of emails) {
+        const audit = {
+          pedidoFornecedorId: email.pedidoFornecedorId || '',
+          supplierId: email.supplierId,
+          pedidoId: email.pedidoId,
+          message: email.auditMessage ?? email.message,
+        };
+
         try {
-          // Check idempotency - prevent duplicate sends
-          const isDuplicate = await checkIdempotency(
-            email.supplierId,
-            email.pedidoId
-          );
+          const isDuplicate = await checkIdempotency(email.supplierId, email.pedidoId);
 
           if (isDuplicate) {
-            const errorMsg = `Email to ${email.supplierId} in pedido ${email.pedidoId} has already been sent. Duplicate sends are blocked to prevent duplicates.`;
-            newErrors.push(errorMsg);
-            failedCount++;
-            continue;
-          }
-
-          // Send the email
-          const result = await sendEmail({
-            to: email.to,
-            subject: 'Pedido de Orçamento', // This will be set by MessageComposer
-            body: email.message,
-            supplierId: email.supplierId,
-            pedidoId: email.pedidoId,
-            pedidoFornecedorId: email.pedidoFornecedorId,
-          });
-
-          if (!result.success) {
-            const errorMsg = `Failed to send to ${email.to}: ${result.error || 'Unknown error'}`;
-            newErrors.push(errorMsg);
-            failedCount++;
-
-            // Record the failed send
-            await recordSend({
-              pedidoFornecedorId: email.pedidoFornecedorId || '',
+            newErrors.push(`${email.to} já recebeu este pedido. O envio repetido foi bloqueado.`);
+            failed++;
+          } else {
+            const result = await sendEmail({
+              to: email.to,
+              subject: email.subject ?? 'Pedido de orçamento',
+              body: email.message,
               supplierId: email.supplierId,
               pedidoId: email.pedidoId,
-              message: email.message,
-              status: 'falhou',
-              errorMessage: result.error,
+              pedidoFornecedorId: email.pedidoFornecedorId,
             });
-            continue;
+
+            if (result.success) {
+              sentCount++;
+              try {
+                await recordSend({ ...audit, status: 'sucesso' });
+              } catch {
+                // Not retryable: the email already left, so a retry would send it twice
+                newErrors.push(`E-mail enviado para ${email.to}, mas o envio não foi registrado no pedido.`);
+              }
+            } else {
+              newErrors.push(`Falha ao enviar para ${email.to}: ${result.error || 'erro desconhecido'}`);
+              failed++;
+              retryableIds.push(email.supplierId);
+              await recordSend({ ...audit, status: 'falhou', errorMessage: result.error });
+            }
           }
-
-          // Record successful send
-          await recordSend({
-            pedidoFornecedorId: email.pedidoFornecedorId || '',
-            supplierId: email.supplierId,
-            pedidoId: email.pedidoId,
-            message: email.message,
-            status: 'sucesso',
-          });
-
-          sentCount++;
         } catch (err) {
-          const errorMsg =
-            err instanceof Error
-              ? err.message
-              : `Error sending to ${email.supplierId}: Unknown error`;
-          newErrors.push(errorMsg);
-          failedCount++;
+          const reason = err instanceof Error ? err.message : 'erro desconhecido';
+          if (!retryableIds.includes(email.supplierId)) {
+            newErrors.push(`Falha ao enviar para ${email.to}: ${reason}`);
+            failed++;
+            retryableIds.push(email.supplierId);
+          }
         }
 
-        // Update progress
-        setProgress((prev) => ({
-          ...prev,
-          sent: sentCount,
-          failed: failedCount,
-        }));
+        const currentSent = sentCount;
+        const currentFailed = failed;
+        setProgress((prev) => ({ ...prev, sent: currentSent, failed: currentFailed }));
       }
 
-      // Update final state
       setErrors(newErrors);
       setSuccessCount(sentCount);
-      setFailedCount(failedCount);
-
-      // Only allow retry if there were failures
-      if (failedCount > 0) {
-        setCanRetry(true);
-      }
-
-      // Stop sending
+      setFailedCount(failed);
+      setFailedSupplierIds(retryableIds);
+      setCanRetry(retryableIds.length > 0);
       setIsSending(false);
+
+      return {
+        successCount: sentCount,
+        failedCount: failed,
+        errors: newErrors,
+        failedSupplierIds: retryableIds,
+      };
     },
     [clearErrors, resetProgress]
   );
@@ -180,6 +177,7 @@ export function useSendEmail(): UseSendEmailReturn {
     errors,
     successCount,
     failedCount,
+    failedSupplierIds,
     sendBatch,
     clearErrors,
     resetProgress,

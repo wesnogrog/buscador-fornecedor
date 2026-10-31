@@ -102,37 +102,17 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   onClick,
   ariaLabel,
   title,
-  openInWindow = false,
 }) => {
   // Generate the wa.me URL with pre-filled message
   const whatsappUrl = generateWhatsAppUrl(phoneNumber, message);
 
-  /**
-   * Handle button click
-   *
-   * Opens the WhatsApp URL in a new window/tab.
-   * Calls optional onClick callback for analytics/logging.
-   */
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    // Call optional callback
-    if (onClick) {
-      onClick();
-    }
-
-    // If it's a regular link with target="_blank", browser handles it
-    // But we can add custom behavior here if needed
-    if (supplierName) {
-      // Could log analytics here
-      // analytics.trackWhatsAppClick(supplierName);
-    }
-  };
 
   return (
     <a
       href={whatsappUrl}
       target="_blank"
       rel="noopener noreferrer"
-      onClick={handleClick}
+      onClick={() => onClick?.()}
       className={className}
       aria-label={ariaLabel || `Contact ${supplierName} via WhatsApp`}
       title={title || 'Open WhatsApp conversation'}

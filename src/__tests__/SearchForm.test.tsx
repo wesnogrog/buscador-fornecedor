@@ -161,7 +161,7 @@ describe('SearchForm component', () => {
       await user.click(searchButton)
 
       await waitFor(() => {
-        expect(screen.getByText(/Erro/i)).toBeInTheDocument()
+        expect(screen.getByText('Erro:')).toBeInTheDocument()
         expect(screen.getByText(/API Error/i)).toBeInTheDocument()
       })
     })

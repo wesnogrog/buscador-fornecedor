@@ -8,7 +8,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
-import type { Database } from '../utils/types';
 import { useSavedRequests } from '../hooks/useSavedRequests';
 import { formatDate, formatDateTime, formatStatus } from '../utils/pedidos';
 import type { SupplierDetail } from '../utils/pedidos';

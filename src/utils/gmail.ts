@@ -31,6 +31,19 @@ function validateEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+function utf8ToBase64(text: string): string {
+  let binary = '';
+  new TextEncoder().encode(text).forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+// Raw headers must be ASCII, so accents go in an RFC 2047 encoded word
+function encodeHeaderValue(value: string): string {
+  return /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${utf8ToBase64(value)}?=`;
+}
+
 /**
  * Create an email message object ready to send
  * Converts to RFC 2822 format and base64url encodes it
@@ -49,6 +62,11 @@ export function createEmailMessage(input: {
     throw new Error('Subject cannot be empty');
   }
 
+  // A line break in a header would let the text inject extra headers
+  if (/[\r\n]/.test(input.subject)) {
+    throw new Error('Subject cannot contain line breaks');
+  }
+
   if (!input.body || input.body.trim().length === 0) {
     throw new Error('Body cannot be empty');
   }
@@ -59,16 +77,18 @@ export function createEmailMessage(input: {
     subject: input.subject,
   };
 
-  // Create message in RFC 2822 format
-  const headerString = Object.entries(headers)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join('\r\n');
-
-  const rawMessage = `${headerString}\r\n\r\n${input.body}`;
+  const rawMessage = [
+    `To: ${input.to}`,
+    `Subject: ${encodeHeaderValue(input.subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    utf8ToBase64(input.body),
+  ].join('\r\n');
 
   // Encode to base64url for Gmail API
-  const encoded = Buffer.from(rawMessage)
-    .toString('base64')
+  const encoded = btoa(rawMessage)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
@@ -142,16 +162,18 @@ export async function sendEmail(
     });
 
     if (error) {
+      // Non-2xx responses keep the real reason in the response body
+      const details = await error.context?.json?.().catch(() => null);
       return {
         success: false,
-        error: error.message || 'Unknown error during send',
+        error: details?.error || error.message || 'Unknown error during send',
       };
     }
 
     if (data?.error) {
       return {
         success: false,
-        error: data.error.message || 'Gmail API error',
+        error: data.error.message || data.error || 'Gmail API error',
       };
     }
 

@@ -1,12 +1,13 @@
 import React, { createContext, useEffect, useState } from 'react'
 import { supabase } from '@/utils/supabase'
-import type { User } from '@supabase/supabase-js'
+import { isAgenciaEmail } from '@/utils/types'
+import type { Session, User } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   error: string | null
-  login: () => void
+  login: () => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -16,50 +17,72 @@ interface AuthProviderProps {
   children: React.ReactNode
 }
 
+async function saveGmailCredential(refreshToken: string) {
+  const { error } = await supabase.functions.invoke('save-gmail-credential', {
+    body: { refresh_token: refreshToken },
+  })
+  if (error) {
+    console.error('Failed to save Gmail credential:', error.message)
+  }
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const getSession = async () => {
-      try {
-        const { data: { user }, error: sessionError } = await supabase.auth.getUser()
-        if (sessionError) throw sessionError
-        setUser(user || null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error')
-      } finally {
-        setLoading(false)
+    const applySession = async (session: Session | null) => {
+      const sessionUser = session?.user ?? null
+      if (sessionUser && !isAgenciaEmail(sessionUser.email ?? '')) {
+        await supabase.auth.signOut()
+        setUser(null)
+        setError('Acesso permitido apenas para contas @agenciasurto.com.')
+        return
+      }
+      setUser(sessionUser)
+      // Google only returns this token right after sign-in
+      if (sessionUser && session?.provider_refresh_token) {
+        await saveGmailCredential(session.provider_refresh_token)
       }
     }
 
-    getSession()
+    supabase.auth
+      .getSession()
+      .then(({ data, error: sessionError }) => {
+        if (sessionError) throw sessionError
+        return applySession(data.session)
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Erro desconhecido'))
+      .finally(() => setLoading(false))
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
+    // Calling Supabase directly inside this callback can deadlock its auth lock
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setTimeout(() => applySession(session), 0)
     })
 
     return () => subscription?.unsubscribe()
   }, [])
 
-  const getOAuthUrl = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    const redirectUrl = `${window.location.origin}/auth/callback`
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUrl,
-      response_type: 'code',
-      scope: 'email profile',
-      hd: 'agenciasurto.com',
+  const login = async () => {
+    setError(null)
+    const { error: loginError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        scopes: 'https://www.googleapis.com/auth/gmail.send',
+        queryParams: {
+          hd: 'agenciasurto.com',
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
     })
-
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-  }
-
-  const login = () => {
-    window.location.href = getOAuthUrl()
+    if (loginError) {
+      setError(loginError.message)
+    }
   }
 
   const logout = async () => {

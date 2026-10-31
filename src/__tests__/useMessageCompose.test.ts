@@ -82,6 +82,9 @@ describe('useMessageCompose', () => {
     act(() => {
       result.current.selectTemplate(mockTemplates[0].id);
       result.current.updateField('servico', 'Locação de Som');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa ABC');
     });
 
@@ -100,6 +103,9 @@ describe('useMessageCompose', () => {
       result.current.updateField('data', '15/12/2024');
       result.current.updateField('local', 'São Paulo - SP');
       result.current.updateField('prazo', '2 dias');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Fornecedor XYZ');
     });
 
@@ -114,6 +120,9 @@ describe('useMessageCompose', () => {
     act(() => {
       result.current.selectTemplate(mockTemplates[0].id);
       result.current.updateField('servico', 'Locação de Som');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa A');
       result.current.generatePreview('supplier-2', 'Empresa B');
       result.current.generatePreview('supplier-3', 'Empresa C');
@@ -136,6 +145,9 @@ describe('useMessageCompose', () => {
     act(() => {
       result.current.selectTemplate(mockTemplates[0].id);
       result.current.updateField('servico', 'Locação de Som');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa A');
     });
 
@@ -154,6 +166,9 @@ describe('useMessageCompose', () => {
     act(() => {
       result.current.selectTemplate(mockTemplates[0].id);
       result.current.updateField('servico', 'Locação de Som');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa A');
     });
 
@@ -245,6 +260,9 @@ describe('useMessageCompose', () => {
     act(() => {
       result.current.selectTemplate(mockTemplates[0].id);
       result.current.updateField('servico', 'Locação de Som');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa A');
     });
 
@@ -252,6 +270,9 @@ describe('useMessageCompose', () => {
 
     act(() => {
       result.current.updateField('servico', 'Catering');
+    });
+
+    act(() => {
       result.current.generatePreview('supplier-1', 'Empresa A');
     });
 

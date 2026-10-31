@@ -4,7 +4,7 @@
  * Allows user to select suppliers for message composition
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Fornecedor } from '../utils/types';
 import { sortSuppliers, filterSuppliersLocally, groupByIndicator } from '../utils/suppliers';
 import { indicatorLabels } from '../utils/indicators';
@@ -23,6 +23,9 @@ interface ResultsProps {
 
   /** Allow filtering */
   allowFilter?: boolean;
+
+  /** Called by the "Continuar" button */
+  onContinue?: () => void;
 }
 
 /**
@@ -38,6 +41,7 @@ export function Results({
   onSelectSuppliers,
   groupByIndicator: shouldGroupByIndicator = false,
   allowFilter = true,
+  onContinue,
 }: ResultsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'sorted' | 'grouped'>('sorted');
@@ -52,20 +56,21 @@ export function Results({
   const supplierIds = sortedSuppliers.map((s) => s.id);
   const selection = useSupplierSelection(supplierIds);
 
-  // Handle selection change
+  // Notify after the state commits; reading it in the click handler returns the previous selection
+  useEffect(() => {
+    onSelectSuppliers?.(selection.getSelected());
+  }, [selection.checked]);
+
   const handleSelectChange = (id: string) => {
     selection.toggle(id);
-    onSelectSuppliers?.(selection.getSelected());
   };
 
   const handleSelectAll = () => {
     selection.toggleAll();
-    onSelectSuppliers?.(selection.getSelected());
   };
 
   const handleClearAll = () => {
     selection.clear();
-    onSelectSuppliers?.([]);
   };
 
   // Render sorted view
@@ -222,7 +227,7 @@ export function Results({
         {/* Action Button */}
         {selection.count() > 0 && (
           <div className="fixed bottom-6 right-6">
-            <button className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 transition-colors">
+            <button onClick={onContinue} className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 transition-colors">
               Continuar com {selection.count()} fornecedor
               {selection.count() !== 1 ? 'es' : ''}
             </button>

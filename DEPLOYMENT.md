@@ -41,7 +41,6 @@ This guide explains how to deploy the Buscador de Fornecedor React application t
 Required environment variables:
 - `VITE_SUPABASE_URL` - Supabase project URL
 - `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `VITE_GOOGLE_CLIENT_ID` - Google OAuth client ID
 
 ## Step 1: Local Development Setup
 
@@ -69,7 +68,6 @@ nano .env.local
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 ### 1.4 Verify Build Works Locally
@@ -140,7 +138,6 @@ In your GitHub repository:
 | `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare Account ID |
 | `VITE_SUPABASE_URL` | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Your Supabase anonymous key |
-| `VITE_GOOGLE_CLIENT_ID` | Your Google OAuth client ID |
 
 **Finding your Account ID:**
 - Cloudflare Dashboard > Sidebar > Account
@@ -160,41 +157,40 @@ The workflow file `.github/workflows/deploy.yml` is included and will:
 3. **Deploy to Cloudflare Pages** (only on main branch)
 4. **Comment on PRs** with build status
 
-## Step 4: Google OAuth Configuration
+## Step 4: Supabase, Google Login and Gmail
 
-### 4.1 Create OAuth 2.0 Client ID
+Login and Gmail sending go through Supabase Auth, so the app has no Google variable of its own.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create new project or select existing one
-3. Navigate to **Credentials** > **Create Credentials** > **OAuth client ID**
-4. Choose **Web application**
-5. Add authorized redirect URIs:
+### 4.1 Create the Google OAuth client
 
+1. In Google Cloud Console, create a project. No billing account is needed.
+2. Configure the OAuth consent screen as **Internal** and add the scope `https://www.googleapis.com/auth/gmail.send`.
+3. Create an OAuth client of type **Web application**.
+4. Add this authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`.
+
+A Workspace administrator may need to approve the app.
+
+### 4.2 Enable Google in Supabase
+
+1. In Authentication > Providers, enable **Google** and paste the client ID and secret.
+2. In Authentication > URL Configuration, set the Site URL to the production URL and add `http://localhost:5173` to the redirect URLs.
+
+### 4.3 Apply the database and deploy the functions
+
+```bash
+supabase link --project-ref <project-ref>
+supabase db push
+supabase secrets set GMAIL_ENCRYPTION_KEY=<long-random-value> GOOGLE_CLIENT_ID=<client-id> GOOGLE_CLIENT_SECRET=<client-secret>
+supabase functions deploy send-email
+supabase functions deploy save-gmail-credential
 ```
-http://localhost:5173/auth/callback
-http://localhost:5173/
-https://buscador-fornecedor.pages.dev/auth/callback
-https://buscador-fornecedor.pages.dev/
-https://your-custom-domain.com/auth/callback
-https://your-custom-domain.com/
-```
 
-**Note:** Add your custom domain URLs if using a custom domain.
+Changing `GMAIL_ENCRYPTION_KEY` later makes the saved credentials unreadable, and everyone must log in again.
 
-### 4.2 Add Client ID to GitHub Secrets
+### 4.4 Run the RLS tests
 
-Copy the OAuth Client ID to GitHub Secrets as `VITE_GOOGLE_CLIENT_ID`.
-
-### 4.3 Configure Workspace Domain
-
-The app enforces `@agenciasurto.com` domain. This is configured in:
-- `src/context/AuthContext.tsx` - `hd: 'agenciasurto.com'`
-- Login validation in `src/hooks/useAuth.ts`
-
-To change the domain, edit these files:
-```typescript
-// In AuthContext.tsx
-hd: 'your-domain.com'
+```bash
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... npm run test:integration
 ```
 
 ## Step 5: Custom Domain (Optional)
@@ -213,10 +209,6 @@ Update Google OAuth authorized redirect URIs with your custom domain:
 https://buscador.example.com/auth/callback
 https://buscador.example.com/
 ```
-
-### 5.3 Update Environment Variables
-
-If using custom domain, update `VITE_GOOGLE_CLIENT_ID` in GitHub Secrets if needed.
 
 ## Step 6: SPA Routing Configuration
 
@@ -334,7 +326,6 @@ Common causes:
 ```javascript
 // In browser console
 console.log(import.meta.env.VITE_SUPABASE_URL)
-console.log(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 ```
 
 ### Issue: OAuth login fails with CORS error
@@ -343,7 +334,6 @@ console.log(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 1. Check Google OAuth redirect URIs match exactly
 2. Verify Supabase CORS configuration
 3. Check browser console for specific error
-4. Ensure `VITE_GOOGLE_CLIENT_ID` is correct
 
 ### Issue: Form data not saving
 

@@ -225,7 +225,7 @@ describe('WhatsAppButton Component', () => {
       render(
         <WhatsAppButton
           phoneNumber="5511999887766"
-          message="Line 1\nLine 2\nLine 3"
+          message={'Line 1\nLine 2\nLine 3'}
         />
       );
 
@@ -251,7 +251,7 @@ Poderia me passar informações?`;
 
       const link = screen.getByRole('link') as HTMLAnchorElement;
       expect(link.href).toContain('%0A');
-      expect(link.href).toContain('Catering%20Delicia');
+      expect(link.href).toContain('Catering%20Del%C3%ADcia');
     });
   });
 
@@ -298,7 +298,7 @@ Poderia me passar informações?`;
 
       const link = screen.getByRole('link') as HTMLAnchorElement;
       // URL should not have ?text parameter if message is empty
-      expect(link.href).toBe('https://wa.me/5511999887766/');
+      expect(link.href).toBe('https://wa.me/5511999887766');
     });
 
     it('should handle very long message', () => {
@@ -444,7 +444,7 @@ describe('WhatsApp Utils: generateWhatsAppUrl()', () => {
 
       expect(url).toContain('?text=');
       expect(url).toContain('%3F'); // ?
-      expect(url).toContain('%21'); // !
+      expect(url).toContain('desconto!'); // encodeURIComponent keeps !
     });
 
     it('should handle URLs within message', () => {
@@ -521,10 +521,8 @@ Obrigado!`;
   });
 
   describe('Edge Cases and Error Handling', () => {
-    it('should handle empty phone number gracefully', () => {
-      const url = generateWhatsAppUrl('', 'Hello');
-      // Should either return a valid URL or handle the error
-      expect(url).toContain('https://wa.me/');
+    it('should reject an empty phone number', () => {
+      expect(() => generateWhatsAppUrl('', 'Hello')).toThrow('Phone number must be a non-empty string');
     });
 
     it('should handle very long phone numbers', () => {

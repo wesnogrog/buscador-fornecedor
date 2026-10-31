@@ -6,10 +6,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SavedRequests from '../pages/SavedRequests';
-import * as pedidosModule from '../utils/pedidos';
 
-vi.mock('../utils/pedidos');
-vi.mock('../hooks/useSavedRequests');
+vi.mock('../utils/pedidos', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/pedidos')>()),
+  listPedidos: vi.fn(),
+  getPedidoDetail: vi.fn(),
+  markSupplierStatus: vi.fn(),
+}));
+
+const mockNavigate = vi.hoisted(() => vi.fn());
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
+const mockUseSavedRequests: any = {
+  list: [],
+  loading: false,
+  error: null,
+  detail: null,
+  detailLoading: false,
+  openDetail: vi.fn(),
+  closeDetail: vi.fn(),
+  updateSupplierStatus: vi.fn(),
+};
+
+vi.mock('../hooks/useSavedRequests', () => ({
+  useSavedRequests: () => mockUseSavedRequests,
+}));
 
 const mockPedidosList = [
   {
@@ -37,21 +60,13 @@ const mockPedidosList = [
 describe('SavedRequests component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mockUseSavedRequests, { list: [], loading: false, error: null });
   });
 
   it('should render empty state when no pedidos exist', () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: [],
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
-
-    vi.mocked(pedidosModule.listPedidos).mockResolvedValue([]);
+    mockUseSavedRequests.list = [];
+    mockUseSavedRequests.loading = false;
+    mockUseSavedRequests.error = null;
 
     render(<SavedRequests />);
 
@@ -59,16 +74,9 @@ describe('SavedRequests component', () => {
   });
 
   it('should render list of pedidos with status summary', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: mockPedidosList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = mockPedidosList;
+    mockUseSavedRequests.loading = false;
+    mockUseSavedRequests.error = null;
 
     render(<SavedRequests />);
 
@@ -83,58 +91,29 @@ describe('SavedRequests component', () => {
   });
 
   it('should show supplier count in summary', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: mockPedidosList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = mockPedidosList;
 
     render(<SavedRequests />);
 
     await waitFor(() => {
-      expect(screen.getByText(/2 \/ 5/)).toBeInTheDocument(); // contactedCount / supplierCount
-      expect(screen.getByText(/3 \/ 3/)).toBeInTheDocument();
+      expect(document.body.textContent).toMatch(/2 \/ 5 fornecedores/);
+      expect(document.body.textContent).toMatch(/3 \/ 3 fornecedores/);
     });
   });
 
   it('should show creation date in correct format', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: mockPedidosList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = mockPedidosList;
 
     render(<SavedRequests />);
 
     await waitFor(() => {
       // Should show date in readable format (e.g., "31 de outubro de 2026")
-      const dateText = screen.getByText(/outubro/i);
-      expect(dateText).toBeInTheDocument();
+      expect(screen.getAllByText(/de outubro de 2026/i).length).toBeGreaterThan(0);
     });
   });
 
-  it('should call openDetail when clicking on a pedido', async () => {
-    const mockOpenDetail = vi.fn();
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: mockPedidosList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: mockOpenDetail,
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+  it('should navigate to the detail page when clicking on a pedido', async () => {
+    mockUseSavedRequests.list = mockPedidosList;
 
     render(<SavedRequests />);
 
@@ -143,20 +122,13 @@ describe('SavedRequests component', () => {
       fireEvent.click(pedidoLink);
     });
 
-    expect(mockOpenDetail).toHaveBeenCalledWith('pedido-1');
+    expect(mockNavigate).toHaveBeenCalledWith('/pedido/pedido-1');
   });
 
   it('should show loading state while fetching pedidos', () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: [],
-      loading: true,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = [];
+    mockUseSavedRequests.loading = true;
+    mockUseSavedRequests.error = null;
 
     render(<SavedRequests />);
 
@@ -165,16 +137,9 @@ describe('SavedRequests component', () => {
 
   it('should show error message if fetch fails', () => {
     const mockError = new Error('Failed to fetch');
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: [],
-      loading: false,
-      error: mockError,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = [];
+    mockUseSavedRequests.loading = false;
+    mockUseSavedRequests.error = mockError;
 
     render(<SavedRequests />);
 
@@ -182,26 +147,11 @@ describe('SavedRequests component', () => {
   });
 
   it('should be mobile-responsive', () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: mockPedidosList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = mockPedidosList;
 
     const { container } = render(<SavedRequests />);
 
-    // Check for mobile-responsive classes
-    const wrapper = container.querySelector('[class*="grid"]') || container.querySelector('[class*="flex"]');
-    expect(wrapper).toBeInTheDocument();
-
-    // Verify responsive grid classes (sm:, md:, lg:)
-    const classes = container.className;
-    expect(classes).toMatch(/responsive|sm:|md:|lg:|grid|flex/);
+    expect(container.querySelector('[class*="sm:"]')).toBeInTheDocument();
   });
 
   it('should sort pedidos by creation date (newest first)', async () => {
@@ -228,16 +178,7 @@ describe('SavedRequests component', () => {
       },
     ];
 
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      list: unsortedList,
-      loading: false,
-      error: null,
-      detail: null,
-      detailLoading: false,
-      openDetail: vi.fn(),
-      closeDetail: vi.fn(),
-      updateSupplierStatus: vi.fn(),
-    }));
+    mockUseSavedRequests.list = unsortedList;
 
     render(<SavedRequests />);
 

@@ -135,11 +135,11 @@ describe('SupplierCard Component', () => {
       />
     );
 
-    const whatsappLink = screen.getByText('WhatsApp 💬');
-    expect(whatsappLink).toHaveAttribute('href', 'https://wa.me/5511999887766');
+    const whatsappLink = screen.getByText('WhatsApp 💬').closest('a');
+    expect(whatsappLink?.getAttribute('href')).toContain('https://wa.me/5511999887766?text=');
   });
 
-  test('renders WhatsApp number when link is not available', () => {
+  test('builds the WhatsApp link from the number when link is not available', () => {
     const supplier = createSupplier({
       whatsapp_numero: '5511999887766',
     });
@@ -152,7 +152,8 @@ describe('SupplierCard Component', () => {
       />
     );
 
-    expect(screen.getByText('5511999887766')).toBeInTheDocument();
+    const whatsappLink = screen.getByText('WhatsApp 💬').closest('a');
+    expect(whatsappLink?.getAttribute('href')).toContain('https://wa.me/5511999887766?text=');
   });
 
   test('prefers WhatsApp link over number when both available', () => {

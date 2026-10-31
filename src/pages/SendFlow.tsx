@@ -4,7 +4,7 @@
  * Integrated with MessageComposer (Task 10) and supplies to SupplierList (Task 9)
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSendEmail, EmailToSend } from '../hooks/useSendEmail';
 
 export interface SendFlowProps {
@@ -19,13 +19,15 @@ export interface SendFlowProps {
     supplierEmail: string;
     subject: string;
     body: string;
+    /** Unfilled template kept in envios */
+    auditBody?: string;
   }>;
 
   /**
    * Selected suppliers for sending
    * Should come from SupplierList (Task 9)
    */
-  selectedSuppliers: Array<{
+  selectedSuppliers?: Array<{
     id: string;
     nome: string;
     email: string;
@@ -150,7 +152,6 @@ function StatusSummary({
  */
 export function SendFlow({
   messages,
-  selectedSuppliers,
   pedidoId,
   onSendComplete,
   onCancel,
@@ -165,9 +166,20 @@ export function SendFlow({
     errors,
     successCount,
     failedCount,
+    failedSupplierIds,
     sendBatch,
     clearErrors,
   } = useSendEmail();
+
+  const toEmail = (msg: SendFlowProps['messages'][number]): EmailToSend => ({
+    to: msg.supplierEmail,
+    supplierId: msg.supplierId,
+    pedidoId,
+    pedidoFornecedorId: msg.pedidoFornecedorId,
+    message: msg.body,
+    subject: msg.subject,
+    auditMessage: msg.auditBody,
+  });
 
   const handleSendClick = async (): Promise<void> => {
     if (messages.length === 0) {
@@ -177,42 +189,23 @@ export function SendFlow({
 
     setHasStarted(true);
 
-    const emailsToSend: EmailToSend[] = messages.map((msg) => ({
-      to: msg.supplierEmail,
-      supplierId: msg.supplierId,
-      pedidoId: pedidoId,
-      pedidoFornecedorId: msg.pedidoFornecedorId,
-      message: msg.body,
-    }));
+    const result = await sendBatch(messages.map(toEmail));
 
-    await sendBatch(emailsToSend);
-
-    // Call parent callback if provided
-    if (onSendComplete) {
-      onSendComplete({
-        successCount,
-        failedCount,
-        errors,
-      });
-    }
+    // Hook state read here would still hold the values from before the send
+    onSendComplete?.({
+      successCount: result.successCount,
+      failedCount: result.failedCount,
+      errors: result.errors,
+    });
   };
 
   const handleRetry = async (): Promise<void> => {
     if (!allowRetry || !canRetry) return;
 
-    // Filter messages for suppliers that had errors
-    // For now, we'll retry all failed ones
-    // In a real implementation, we'd only retry those that failed
-    const emailsToSend: EmailToSend[] = messages.map((msg) => ({
-      to: msg.supplierEmail,
-      supplierId: msg.supplierId,
-      pedidoId: pedidoId,
-      pedidoFornecedorId: msg.pedidoFornecedorId,
-      message: msg.body,
-    }));
-
     clearErrors();
-    await sendBatch(emailsToSend);
+    await sendBatch(
+      messages.filter((msg) => failedSupplierIds.includes(msg.supplierId)).map(toEmail)
+    );
   };
 
   const handleCancel = (): void => {
@@ -280,7 +273,7 @@ export function SendFlow({
             ✓ Envio concluído com sucesso!
           </p>
           <p className="text-sm text-green-700 mt-1">
-            {successCount} e-mail(s) enviado(s). As respostas chegaram no seu
+            {successCount} e-mail(s) enviado(s). As respostas chegam no seu
             Gmail.
           </p>
         </div>

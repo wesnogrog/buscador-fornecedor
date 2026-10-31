@@ -7,7 +7,6 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
-import type { Database } from '../utils/types';
 import { useSavedRequests } from '../hooks/useSavedRequests';
 import { formatDate, formatStatus } from '../utils/pedidos';
 

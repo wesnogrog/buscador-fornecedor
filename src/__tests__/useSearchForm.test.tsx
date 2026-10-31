@@ -207,7 +207,7 @@ describe('useSearchForm hook', () => {
         await result.current.search()
       })
 
-      expect(suppliersModule.filterSuppliers).toHaveBeenCalledWith('catering', '')
+      expect(suppliersModule.filterSuppliers).toHaveBeenCalledWith('catering', null)
     })
 
     it('should clear error on successful search', async () => {

@@ -6,10 +6,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PedidoDetail from '../pages/PedidoDetail';
-import * as pedidosModule from '../utils/pedidos';
 
-vi.mock('../utils/pedidos');
-vi.mock('../hooks/useSavedRequests');
+vi.mock('../utils/pedidos', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/pedidos')>()),
+  listPedidos: vi.fn(),
+  getPedidoDetail: vi.fn(),
+  markSupplierStatus: vi.fn(),
+}));
+
+const mockUseSavedRequests: any = {
+  detail: null,
+  detailLoading: false,
+  error: null,
+  openDetail: vi.fn(),
+  updateSupplierStatus: vi.fn(),
+  closeDetail: vi.fn(),
+};
+
+vi.mock('../hooks/useSavedRequests', () => ({
+  useSavedRequests: () => mockUseSavedRequests,
+}));
+
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ pedidoId: 'pedido-1' }),
   useNavigate: () => vi.fn(),
@@ -75,35 +92,26 @@ const mockPedidoDetail = {
 describe('PedidoDetail component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mockUseSavedRequests, { detail: null, detailLoading: false, error: null });
   });
 
   it('should render pedido details correctly', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      detail: mockPedidoDetail,
-      detailLoading: false,
-      error: null,
-      updateSupplierStatus: vi.fn(),
-      closeDetail: vi.fn(),
-    }));
+    mockUseSavedRequests.detail = mockPedidoDetail;
+    mockUseSavedRequests.detailLoading = false;
+    mockUseSavedRequests.error = null;
 
     render(<PedidoDetail />);
 
     await waitFor(() => {
       expect(screen.getByText('Catering Event')).toBeInTheDocument();
-      expect(screen.getByText('catering')).toBeInTheDocument();
+      expect(screen.getAllByText('catering').length).toBeGreaterThan(0);
       expect(screen.getByText('SP')).toBeInTheDocument();
-      expect(screen.getByText('2026-11-15')).toBeInTheDocument();
+      expect(screen.getByText('15 de novembro de 2026')).toBeInTheDocument();
     });
   });
 
   it('should display supplier list with contact information', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
-      detail: mockPedidoDetail,
-      detailLoading: false,
-      error: null,
-      updateSupplierStatus: vi.fn(),
-      closeDetail: vi.fn(),
-    }));
+    mockUseSavedRequests.detail = mockPedidoDetail;
 
     render(<PedidoDetail />);
 
@@ -116,49 +124,50 @@ describe('PedidoDetail component', () => {
   });
 
   it('should show send history for contacted suppliers', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
     await waitFor(() => {
       // Check for send history of first supplier
-      expect(screen.getByText(/email/i)).toBeInTheDocument();
-      expect(screen.getByText(/sucesso/i)).toBeInTheDocument();
+      expect(screen.getByText(/Último envio/)).toBeInTheDocument();
+      expect(screen.getByText('✓ Enviado')).toBeInTheDocument();
     });
   });
 
   it('should display status badges for suppliers', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Enviado/i)).toBeInTheDocument();
-      expect(screen.getByText(/Pendente/i)).toBeInTheDocument();
+      const selects = screen.getAllByRole('combobox');
+      expect(selects[0]).toHaveValue('enviado');
+      expect(selects[1]).toHaveValue('pendente');
     });
   });
 
   it('should allow changing supplier status via dropdown', async () => {
     const mockUpdateSupplierStatus = vi.fn().mockResolvedValue(undefined);
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: mockUpdateSupplierStatus,
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -189,13 +198,13 @@ describe('PedidoDetail component', () => {
       status: 'nenhum_contato',
     };
 
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: detailNoContact,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -205,31 +214,31 @@ describe('PedidoDetail component', () => {
   });
 
   it('should show contact options (email/WhatsApp) for suppliers', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
     await waitFor(() => {
       // Check for WhatsApp numbers that should be clickable
-      expect(screen.getByText('11999999999')).toBeInTheDocument();
-      expect(screen.getByText('11988888888')).toBeInTheDocument();
+      expect(screen.getByText(/11999999999/)).toBeInTheDocument();
+      expect(screen.getByText(/11988888888/)).toBeInTheDocument();
     });
   });
 
   it('should display loading state while fetching detail', () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: null,
       detailLoading: true,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -238,13 +247,13 @@ describe('PedidoDetail component', () => {
 
   it('should show error message if detail fetch fails', () => {
     const mockError = new Error('Failed to fetch detail');
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: null,
       detailLoading: false,
       error: mockError,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -252,13 +261,13 @@ describe('PedidoDetail component', () => {
   });
 
   it('should be mobile-responsive with collapsible supplier details', () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     const { container } = render(<PedidoDetail />);
 
@@ -269,13 +278,13 @@ describe('PedidoDetail component', () => {
 
   it('should allow reopening supplier selection for new message send', async () => {
     const mockUpdateSupplierStatus = vi.fn();
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: mockUpdateSupplierStatus,
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -296,13 +305,13 @@ describe('PedidoDetail component', () => {
       status: 'nenhum_contato',
     };
 
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: detailNoSuppliers,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 
@@ -312,13 +321,13 @@ describe('PedidoDetail component', () => {
   });
 
   it('should display supplier address when available', async () => {
-    const mockUseSavedRequests = vi.hoisted(() => ({
+    Object.assign(mockUseSavedRequests, {
       detail: mockPedidoDetail,
       detailLoading: false,
       error: null,
       updateSupplierStatus: vi.fn(),
       closeDetail: vi.fn(),
-    }));
+    });
 
     render(<PedidoDetail />);
 

@@ -37,10 +37,13 @@ export interface UseSupplierSelectionReturn {
 export function useSupplierSelection(suppliers: string[]): UseSupplierSelectionReturn {
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
-  // Reset selection when suppliers array changes
+  // Keep selected suppliers that are still listed; drop the ones that are gone
   useEffect(() => {
-    setChecked(new Set());
-  }, [suppliers.length]); // Only check length to avoid excessive re-renders
+    setChecked((prev) => {
+      const next = new Set([...prev].filter((id) => suppliers.includes(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [suppliers.join('\0')]);
 
   const toggle = (id: string) => {
     setChecked((prev) => {

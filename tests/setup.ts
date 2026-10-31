@@ -7,21 +7,27 @@ afterEach(() => {
 })
 
 // Mock Supabase client
-vi.mock('@/utils/supabase', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      contains: vi.fn().mockReturnThis(),
-      not: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-    })),
-    auth: {
-      getUser: vi.fn(() => Promise.resolve({ data: { user: null }, error: null })),
-      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+vi.mock('@/utils/supabase', () => {
+  const mockChain = {
+    select: vi.fn(function() { return this }),
+    eq: vi.fn(function() { return this }),
+    contains: vi.fn(function() { return this }),
+    not: vi.fn(function() { return this }),
+    order: vi.fn(function() { return this }),
+    data: null,
+    error: null,
+  }
+
+  return {
+    supabase: {
+      from: vi.fn(() => mockChain),
+      auth: {
+        getUser: vi.fn(() => Promise.resolve({ data: { user: null }, error: null })),
+        onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+      },
     },
-  },
-}))
+  }
+})
 
 // Suppress console errors in tests (optional, for cleaner output)
 const originalError = console.error

@@ -12,7 +12,6 @@
  *    - SUPABASE_SERVICE_KEY (optional, for automatic test user creation)
  *    - VITE_SUPABASE_URL (alternative)
  *    - VITE_SUPABASE_ANON_KEY (alternative)
- *    - VITE_SUPABASE_SERVICE_KEY (alternative)
  * 3. Run: npm run test:integration
  *
  * If SUPABASE_SERVICE_KEY is not available:
@@ -24,7 +23,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../utils/types';
 
-describe('RLS: Row-Level Security Integration Tests', () => {
+// Needs a real Supabase project, so it only runs when real credentials are provided
+describe.skipIf(!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY)('RLS: Row-Level Security Integration Tests', () => {
   let supabaseAgencia: SupabaseClient<Database>;
   let supabaseUser1: SupabaseClient<Database>;
   let supabaseUser2: SupabaseClient<Database>;
@@ -33,7 +33,7 @@ describe('RLS: Row-Level Security Integration Tests', () => {
 
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_KEY = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
   // Test user credentials
   const TEST_USERS = {
@@ -105,29 +105,29 @@ describe('RLS: Row-Level Security Integration Tests', () => {
 
     // Create authenticated clients and sign in with real credentials
     supabaseUser1 = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { error: error1 } = await supabaseUser1.auth.signInWithPassword(
-      TEST_USERS.agencia1.email,
-      TEST_USERS.agencia1.password
-    );
+    const { error: error1 } = await supabaseUser1.auth.signInWithPassword({
+      email: TEST_USERS.agencia1.email,
+      password: TEST_USERS.agencia1.password,
+    });
     if (error1) {
       throw new Error(`Failed to authenticate user1: ${error1.message}`);
     }
 
     supabaseUser2 = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { error: error2 } = await supabaseUser2.auth.signInWithPassword(
-      TEST_USERS.agencia2.email,
-      TEST_USERS.agencia2.password
-    );
+    const { error: error2 } = await supabaseUser2.auth.signInWithPassword({
+      email: TEST_USERS.agencia2.email,
+      password: TEST_USERS.agencia2.password,
+    });
     if (error2) {
       throw new Error(`Failed to authenticate user2: ${error2.message}`);
     }
 
     // External user (wrong domain - should fail RLS checks)
     supabaseExternal = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { error: errorExt } = await supabaseExternal.auth.signInWithPassword(
-      TEST_USERS.external.email,
-      TEST_USERS.external.password
-    );
+    const { error: errorExt } = await supabaseExternal.auth.signInWithPassword({
+      email: TEST_USERS.external.email,
+      password: TEST_USERS.external.password,
+    });
     if (errorExt) {
       throw new Error(`Failed to authenticate external user: ${errorExt.message}`);
     }

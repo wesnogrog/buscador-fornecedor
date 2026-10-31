@@ -8,8 +8,21 @@
 import React from 'react'
 import { useSearchForm } from '@/hooks/useSearchForm'
 import { contactIndicators, indicatorLabels, indicatorIcons, indicatorColors } from '@/utils/indicators'
+import type { Fornecedor } from '@/utils/types'
 
-export function SearchForm(): JSX.Element {
+export interface SearchResult {
+  orcamento_nome: string
+  servico: string
+  regiao: string
+  suppliers: Fornecedor[]
+}
+
+interface SearchFormProps {
+  /** When provided, the results are handed to the next step instead of listed here */
+  onContinue?: (result: SearchResult) => void
+}
+
+export function SearchForm({ onContinue }: SearchFormProps = {}): JSX.Element {
   const form = useSearchForm()
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -108,8 +121,25 @@ export function SearchForm(): JSX.Element {
           </form>
         </div>
 
+        {onContinue && form.suppliers.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              onContinue({
+                orcamento_nome: form.orcamento_nome,
+                servico: form.servico,
+                regiao: form.regiao,
+                suppliers: form.suppliers,
+              })
+            }
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition"
+          >
+            Selecionar fornecedores ({form.suppliers.length})
+          </button>
+        )}
+
         {/* Results Section */}
-        {form.suppliers.length > 0 && (
+        {!onContinue && form.suppliers.length > 0 && (
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">

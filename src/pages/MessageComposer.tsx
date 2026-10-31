@@ -12,17 +12,17 @@
 import React, { useEffect } from 'react';
 import { useMessageCompose } from '../hooks/useMessageCompose';
 import { MessagePreview } from '../components/MessagePreview';
-import type { Modelo, Fornecedor, Pedido } from '../utils/types';
+import type { TemplateFields } from '../utils/template';
+import type { Modelo, Fornecedor } from '../utils/types';
 
 interface MessageComposerProps {
   templates: Modelo[];
   suppliers: Fornecedor[];
   selectedSupplierIds: string[];
-  pedido: Pedido;
   onGoBack: () => void;
   onProceed: (data: {
     selectedTemplate: Modelo;
-    fields: Record<string, string>;
+    fields: TemplateFields;
     previews: Record<string, string>;
   }) => void;
 }
@@ -31,7 +31,6 @@ export function MessageComposer({
   templates,
   suppliers,
   selectedSupplierIds,
-  pedido,
   onGoBack,
   onProceed,
 }: MessageComposerProps): React.ReactElement {
@@ -87,10 +86,11 @@ export function MessageComposer({
             <div className="bg-white rounded-lg shadow p-6 sticky top-24">
               {/* Template Selection */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="template-select" className="block text-sm font-medium text-gray-700 mb-2">
                   Escolha um modelo
                 </label>
                 <select
+                  id="template-select"
                   value={messageCompose.selectedTemplate?.id ?? ''}
                   onChange={(e) => messageCompose.selectTemplate(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -109,10 +109,11 @@ export function MessageComposer({
                 <div className="space-y-4">
                   {/* Serviço */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="field-servico" className="block text-sm font-medium text-gray-700 mb-1">
                       Serviço
                     </label>
                     <input
+                      id="field-servico"
                       type="text"
                       value={messageCompose.fields.servico}
                       onChange={(e) => messageCompose.updateField('servico', e.target.value)}
@@ -123,10 +124,11 @@ export function MessageComposer({
 
                   {/* Evento */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="field-evento" className="block text-sm font-medium text-gray-700 mb-1">
                       Evento (opcional)
                     </label>
                     <input
+                      id="field-evento"
                       type="text"
                       value={messageCompose.fields.evento}
                       onChange={(e) => messageCompose.updateField('evento', e.target.value)}
@@ -137,10 +139,11 @@ export function MessageComposer({
 
                   {/* Data */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="field-data" className="block text-sm font-medium text-gray-700 mb-1">
                       Data (opcional)
                     </label>
                     <input
+                      id="field-data"
                       type="date"
                       value={messageCompose.fields.data}
                       onChange={(e) => messageCompose.updateField('data', e.target.value)}
@@ -150,10 +153,11 @@ export function MessageComposer({
 
                   {/* Local */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="field-local" className="block text-sm font-medium text-gray-700 mb-1">
                       Local (opcional)
                     </label>
                     <input
+                      id="field-local"
                       type="text"
                       value={messageCompose.fields.local}
                       onChange={(e) => messageCompose.updateField('local', e.target.value)}
@@ -164,10 +168,11 @@ export function MessageComposer({
 
                   {/* Prazo */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="field-prazo" className="block text-sm font-medium text-gray-700 mb-1">
                       Prazo (opcional)
                     </label>
                     <input
+                      id="field-prazo"
                       type="text"
                       value={messageCompose.fields.prazo}
                       onChange={(e) => messageCompose.updateField('prazo', e.target.value)}

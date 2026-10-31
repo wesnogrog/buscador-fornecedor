@@ -15,6 +15,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
+import { corsHeaders, isAgenciaEmail, jsonResponse } from '../_shared/http.ts';
 import { decryptCredential } from './crypto.ts';
 
 // Gmail API constants
@@ -104,29 +105,27 @@ async function sendViaGmailAPI(
 }
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
   try {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Missing or invalid authorization' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'Missing or invalid authorization' }, 401);
     }
 
     // Parse request body
     const payload: SendEmailRequest = await req.json();
 
     if (!payload.to || !payload.subject || !payload.body || !payload.encoded) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'Missing required fields' }, 400);
     }
 
     // Initialize Supabase client with service role key (server-side only)
@@ -146,10 +145,11 @@ serve(async (req) => {
     } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
 
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'User authentication failed' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'User authentication failed' }, 401);
+    }
+
+    if (!isAgenciaEmail(user.email)) {
+      return jsonResponse({ error: 'Access restricted to @agenciasurto.com accounts' }, 403);
     }
 
     // Retrieve encrypted Gmail credentials for this user
@@ -160,12 +160,7 @@ serve(async (req) => {
       .single();
 
     if (credentialError || !credentialRecord) {
-      return new Response(
-        JSON.stringify({
-          error: 'No Gmail credentials configured. Please complete OAuth setup.',
-        }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'No Gmail credentials configured. Please complete OAuth setup.' }, 403);
     }
 
     // Get encryption key from Supabase secrets
@@ -201,31 +196,12 @@ serve(async (req) => {
       payload.encoded
     );
 
-    // Return success response
-    return new Response(
-      JSON.stringify({
-        success: true,
-        messageId,
-        threadId,
-      } as SendEmailResponse),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return jsonResponse({ success: true, messageId, threadId } as SendEmailResponse);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     console.error('Send email error:', errorMessage);
 
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: errorMessage,
-      } as SendEmailResponse),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return jsonResponse({ success: false, error: errorMessage } as SendEmailResponse, 500);
   }
 });

@@ -67,7 +67,7 @@ describe('useSupplierSelection', () => {
     expect(result.current.getSelected()).toEqual([]);
   });
 
-  test('toggleAll deselects all when some are selected', () => {
+  test('toggleAll selects all when only some are selected', () => {
     const suppliers = ['id1', 'id2', 'id3'];
     const { result } = renderHook(() => useSupplierSelection(suppliers));
 
@@ -76,7 +76,7 @@ describe('useSupplierSelection', () => {
       result.current.toggleAll();
     });
 
-    expect(result.current.getSelected()).toEqual([]);
+    expect(result.current.getSelected()).toEqual(['id1', 'id2', 'id3']);
   });
 
   test('clears all selections', () => {

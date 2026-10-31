@@ -83,3 +83,42 @@ export async function decryptCredential(
     client_secret: parsed.client_secret,
   };
 }
+
+export async function encryptCredential(
+  credential: DecryptedCredential,
+  encryptionKey: string
+): Promise<Uint8Array> {
+  if (!encryptionKey) {
+    throw new Error('Missing encryption key');
+  }
+
+  const subtle = globalThis.crypto.subtle;
+  const keyMaterial = await subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(encryptionKey)
+  );
+  const key = await subtle.importKey(
+    'raw',
+    keyMaterial,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt']
+  );
+
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const ciphertext = await subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(JSON.stringify(credential))
+  );
+
+  const out = new Uint8Array(IV_LENGTH + ciphertext.byteLength);
+  out.set(iv);
+  out.set(new Uint8Array(ciphertext), IV_LENGTH);
+  return out;
+}
+
+/** PostgREST expects BYTEA values as "\\x..." hex strings. */
+export function toPostgresHex(bytes: Uint8Array): string {
+  return '\\x' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}

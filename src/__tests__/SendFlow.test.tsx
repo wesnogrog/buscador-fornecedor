@@ -186,7 +186,7 @@ describe('SendFlow Component', () => {
       />
     );
 
-    expect(screen.getByText(/Enviando.../)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviando...' })).toBeDisabled();
     expect(screen.getByText(/1 de 2/)).toBeInTheDocument();
   });
 
@@ -208,6 +208,8 @@ describe('SendFlow Component', () => {
         pedidoId="pedido-1"
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /Enviar E-mails/ }));
 
     expect(
       screen.getByText(/Envio concluído com sucesso/)
@@ -238,6 +240,8 @@ describe('SendFlow Component', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Enviar E-mails/ }));
+
     expect(screen.getByText(/Erros ao enviar \(2\)/)).toBeInTheDocument();
     mockErrors.forEach((error) => {
       expect(screen.getByText(error)).toBeInTheDocument();
@@ -265,10 +269,44 @@ describe('SendFlow Component', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Enviar E-mails/ }));
+
     const retryButton = screen.getByRole('button', {
       name: /Tentar Novamente/,
     });
     expect(retryButton).toBeInTheDocument();
+  });
+
+  it('should retry only the suppliers that failed', async () => {
+    const mockSendBatch = vi.fn().mockResolvedValue({
+      successCount: 1,
+      failedCount: 1,
+      errors: ['One email failed'],
+      failedSupplierIds: ['supplier-2'],
+    });
+
+    vi.mocked(useSendEmailModule.useSendEmail).mockReturnValue({
+      ...defaultMockHookState,
+      sendBatch: mockSendBatch,
+      canRetry: true,
+      failedCount: 1,
+      failedSupplierIds: ['supplier-2'],
+    } as any);
+
+    render(
+      <SendFlow
+        messages={mockMessages}
+        selectedSuppliers={mockSelectedSuppliers}
+        pedidoId="pedido-1"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Enviar E-mails/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tentar Novamente/ }));
+
+    await waitFor(() => expect(mockSendBatch).toHaveBeenCalledTimes(2));
+    const retried = mockSendBatch.mock.calls[1][0];
+    expect(retried.map((e: { supplierId: string }) => e.supplierId)).toEqual(['supplier-2']);
   });
 
   it('should not show retry button when retry is disabled', () => {
@@ -291,6 +329,8 @@ describe('SendFlow Component', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Enviar E-mails/ }));
+
     const retryButton = screen.queryByRole('button', {
       name: /Tentar Novamente/,
     });
@@ -299,9 +339,12 @@ describe('SendFlow Component', () => {
 
   it('should call onSendComplete callback after sending', async () => {
     const onSendComplete = vi.fn();
-    const mockSendBatch = vi.fn().mockImplementation(() =>
-      Promise.resolve()
-    );
+    const mockSendBatch = vi.fn().mockResolvedValue({
+      successCount: 2,
+      failedCount: 0,
+      errors: [],
+      failedSupplierIds: [],
+    });
 
     const mockHookState = {
       ...defaultMockHookState,

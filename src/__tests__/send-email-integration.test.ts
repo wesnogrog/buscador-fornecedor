@@ -6,31 +6,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkIdempotency, recordSend } from '../utils/idempotency';
 import { sendEmail } from '../utils/gmail';
-import { createClient } from '@supabase/supabase-js';
 
-// Mock Supabase
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
+const mockSupabase = vi.hoisted(() => ({
+  from: vi.fn(),
+  auth: { getUser: vi.fn() },
+  functions: { invoke: vi.fn() },
 }));
 
+// createClient runs at module load, so the client must exist before beforeEach
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => mockSupabase),
+}));
+
+const insertReturning = (result: unknown) =>
+  vi.fn(() => ({
+    select: () => ({ single: () => Promise.resolve(result) }),
+  }));
+
 describe('Email Send Integration Tests', () => {
-  let mockSupabase: any;
-
   beforeEach(() => {
-    mockSupabase = {
-      from: vi.fn(),
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: 'user-123' } },
-          error: null,
-        }),
-      },
-      functions: {
-        invoke: vi.fn(),
-      },
-    };
-
-    vi.mocked(createClient).mockReturnValue(mockSupabase);
+    mockSupabase.from = vi.fn();
+    mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+      error: null,
+    });
+    mockSupabase.functions.invoke = vi.fn();
   });
 
   describe('Complete send flow', () => {
@@ -46,7 +46,7 @@ describe('Email Send Integration Tests', () => {
       };
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockResolvedValue(mockInsert),
+        insert: insertReturning(mockInsert),
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -140,7 +140,7 @@ describe('Email Send Integration Tests', () => {
     });
 
     it('should record send with all required fields for audit trail', async () => {
-      const insertFunc = vi.fn().mockResolvedValue({
+      const insertFunc = insertReturning({
         data: {
           id: 'envio-789',
           pedido_fornecedor_id: 'pf-1',
@@ -158,7 +158,7 @@ describe('Email Send Integration Tests', () => {
         insert: insertFunc,
       });
 
-      const result = await recordSend({
+      await recordSend({
         pedidoFornecedorId: 'pf-1',
         supplierId: 'supplier-1',
         pedidoId: 'pedido-456',
@@ -167,7 +167,7 @@ describe('Email Send Integration Tests', () => {
       });
 
       expect(insertFunc).toHaveBeenCalled();
-      const insertedData = insertFunc.mock.calls[0][0];
+      const insertedData = (insertFunc.mock.calls as unknown[][])[0][0];
 
       expect(insertedData).toHaveProperty('pedido_fornecedor_id');
       expect(insertedData).toHaveProperty('canal', 'email');
@@ -180,7 +180,7 @@ describe('Email Send Integration Tests', () => {
 
     it('should record failed sends with error message for investigation', async () => {
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockResolvedValue({
+        insert: insertReturning({
           data: {
             id: 'envio-fail',
             status: 'falhou',
@@ -285,12 +285,12 @@ describe('Email Send Integration Tests', () => {
       let lastInsertedKey: string | null = null;
 
       mockSupabase.from.mockReturnValue({
-        insert: vi.fn().mockImplementation((data) => {
+        insert: vi.fn((data) => {
           lastInsertedKey = data.chave_idempotencia;
-          return Promise.resolve({
+          return insertReturning({
             data: { id: 'test', ...data },
             error: null,
-          });
+          })();
         }),
       });
 
