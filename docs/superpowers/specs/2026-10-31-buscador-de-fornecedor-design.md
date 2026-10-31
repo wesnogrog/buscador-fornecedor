@@ -14,9 +14,9 @@ A primeira versão terá sucesso se:
 - cada contato mostrar o que foi verificado e o que é apenas provável;
 - pedir orçamento a 10 fornecedores levar poucos minutos;
 - o time souber quem já foi contatado em cada pedido;
-- a agência não pagar nada dentro da cota gratuita.
+- a agência não receber nenhuma cobrança.
 
-Cerca de 100 a 500 buscas por mês são esperadas no mês movimentado, por um time pequeno que já usa Google Workspace.
+Cerca de 100 a 500 buscas por mês são esperadas no mês movimentado, por um time pequeno que já usa Google Workspace com o domínio @agenciasurto.com.
 
 ## Decisões
 
@@ -24,7 +24,7 @@ A primeira versão usa a API oficial do Google Places, Supabase e envio feito pe
 
 | Tema | Decisão | Motivo |
 | --- | --- | --- |
-| Custo | Zero por mês | Exigência da agência |
+| Custo | Nenhuma cobrança | Exigência da agência |
 | Busca | API oficial do Google Places, com cartão cadastrado e limites ativados | Mais estável que o scraper `tools-google-maps`, sem depender de proxies |
 | Contato válido | Tem e-mail ou WhatsApp, e o canal passa por verificação automática | Critério definido pelo time |
 | Portfólio | Não entra | Dispensado pela agência |
@@ -81,24 +81,24 @@ O banco guarda o identificador do Google e os dados próprios da agência, mas n
 | --- | --- |
 | `pedidos` | Nome do orçamento, serviço, região, data, local, prazo e autor |
 | `pedido_fornecedores` | `place_id` e situação do fornecedor em cada pedido |
-| `fornecedor_contatos` | `place_id`, e-mail e WhatsApp encontrados no site, data da verificação e marca "não contatar" |
+| `fornecedor_contatos` | `place_id`, nome, e-mail e WhatsApp encontrados no site, data da verificação e marca "não contatar" |
 | `modelos` | Textos reutilizáveis, com os campos ainda sem preencher |
 | `envios` | Canal, autor, data, situação e modelo usado, com `{fornecedor}` sem preencher |
 | `cota_mensal` | Consultas usadas por mês e por faixa de preço da API |
 | `credenciais_gmail` | Credencial criptografada de cada pessoa |
 
-**Consultado de novo:** ao reabrir um pedido, nome, endereço e link do Maps vêm do Place Details na faixa Pro. O telefone vem na faixa Enterprise, só quando a pessoa clica no botão de WhatsApp e o número não veio do site. Logo depois de uma busca, os dados já estão na memória da tela e não geram nova consulta.
+**Consultado de novo:** ao reabrir um pedido, o app não faz nenhuma consulta. Ele mostra o nome publicado no site do fornecedor, o domínio, os contatos e a situação. Fornecedores sem site aparecem com o botão "ver dados", que faz uma consulta na faixa Pro. O telefone vem na faixa Enterprise, só quando a pessoa clica no botão de WhatsApp e o número não veio do site. Logo depois de uma busca, os dados já estão na memória da tela e não geram nova consulta.
 
 **E-mails enviados:** a mensagem final, com o nome do fornecedor, fica só na pasta de enviados do Gmail de quem enviou, como qualquer e-mail escrito pela pessoa.
 
 ## Cota e custos
 
-O limite gratuito suporta 500 buscas por mês com 20 resultados cada e cerca de 200 usos de "carregar mais", considerando 22 dias úteis com até 32 consultas por dia. O app bloqueia as consultas antes de chegar à cobrança.
+O limite gratuito suporta 500 buscas por mês com 20 resultados cada e cerca de 200 usos de "carregar mais", considerando 22 dias úteis com até 32 consultas por dia. Limites diários no próprio Google impedem ultrapassar a cota gratuita, mesmo se o app falhar.
 
 | Consulta do Google | Uso no app | Grátis por mês | Preço acima da cota (por 1.000) | Bloqueio no app |
 | --- | --- | --- | --- | --- |
 | Text Search Enterprise | Busca e "carregar mais" | 1.000 | US$ 35 | 950 |
-| Place Details Pro | Reabrir pedido | 5.000 | US$ 17 | 4.750 |
+| Place Details Pro | Botão "ver dados" de fornecedor sem site | 5.000 | US$ 17 | 950, somado à faixa Enterprise |
 | Place Details Enterprise | Telefone ao clicar no WhatsApp | 1.000 | US$ 20 | 950 |
 
 Fonte: [tabela de preços](https://developers.google.com/maps/billing-and-pricing/pricing) e [campos do Text Search](https://developers.google.com/maps/documentation/places/web-service/text-search). A documentação não diz se cada página é cobrada separadamente, então o app conta cada página como uma consulta.
@@ -106,8 +106,8 @@ Fonte: [tabela de preços](https://developers.google.com/maps/billing-and-pricin
 **Limites no Google:**
 
 - **Text Search:** 32 consultas por dia. No máximo, são 992 em um mês de 31 dias, então não há como passar da cota gratuita. Em dias de pico, as buscas param até o dia seguinte.
-- **Place Details:** 150 consultas por dia. Esse limite protege a faixa Pro, mas não a Enterprise, que depende do contador do app. Se o contador falhasse o mês inteiro e todas as consultas fossem Enterprise, a cobrança máxima seria de cerca de US$ 73 por mês (3.650 consultas a US$ 20 por 1.000).
-- **Orçamento:** um alerta de cobrança no Google avisa o responsável à primeira despesa. Ele avisa, mas não interrompe o consumo.
+- **Place Details:** 32 requisições diárias, somando as faixas Pro e Enterprise. O total máximo também é de 992 por mês, abaixo das duas cotas gratuitas. O limite vale para todo o time.
+- **Orçamento:** um alerta no Google avisa o responsável à primeira despesa, mas não interrompe o consumo. Ele existe porque a garantia vale para os limites configurados e as cotas atuais: se o Google reduzir a cota gratuita, os limites precisam ser revistos. A [documentação de custos](https://developers.google.com/maps/billing-and-pricing/manage-costs) confirma que, ao atingir o limite, as requisições falham.
 
 **Outros limites:** cada pessoa envia até 100 e-mails por dia pelo app. O plano gratuito do Supabase pausa projetos após cerca de uma semana sem uso, segundo [fonte de terceiros](https://automationatlas.io/answers/supabase-free-tier-limits-2026/), o que não deve ocorrer com o volume previsto.
 
@@ -118,7 +118,7 @@ Uma falha em um fornecedor nunca interrompe os demais, e nenhum erro apaga o tex
 | Situação | O que o app faz |
 | --- | --- |
 | Cota de busca perto do fim | Avisa a partir de 80% e bloqueia ao atingir o limite. Pedidos salvos e contatos do site continuam disponíveis |
-| Limite diário do Google atingido | Informa que novas buscas voltam no dia seguinte |
+| Limite diário do Google atingido | Informa que novas consultas voltam no dia seguinte. O botão de WhatsApp fica indisponível quando depende de uma consulta |
 | Site lento ou fora do ar | Desiste depois de 8 segundos por página e mostra o que tiver |
 | Falha ao enviar um e-mail | Marca o envio como "falhou", mostra o motivo e permite tentar de novo |
 | E-mail devolvido | A devolução chega no Gmail da pessoa, que marca o contato como inválido no app |
@@ -132,7 +132,7 @@ Uma falha em um fornecedor nunca interrompe os demais, e nenhum erro apaga o tex
 
 Só contas do domínio da agência acessam o app, e todas as chaves ficam no servidor.
 
-- **Acesso:** o servidor confere o domínio da conta em cada função, e as regras do banco (RLS) só respondem a usuários logados desse domínio.
+- **Acesso:** o servidor confere o domínio @agenciasurto.com em cada função, e as regras do banco (RLS) só respondem a usuários logados desse domínio.
 - **Chave do Google:** fica nos segredos das Edge Functions e nunca chega ao navegador.
 - **Gmail:** o app pede só o escopo `gmail.send`, que [o Google classifica como sensível](https://developers.google.com/workspace/gmail/api/auth/scopes) e que permite enviar, mas não ler e-mails. O app é configurado como [interno da organização](https://support.google.com/cloud/answer/13464323), o que dispensa a verificação do Google. Um administrador pode precisar aprová-lo.
 - **Credenciais:** a credencial do Gmail fica criptografada, e só a função de envio consegue usá-la.
@@ -145,20 +145,20 @@ Só contas do domínio da agência acessam o app, e todas as chaves ficam no ser
 
 A entrega depende de testes automáticos sem custo e de uma validação real com o time.
 
-- **Automáticos:** extração de e-mails e WhatsApp, classificação de telefones, preenchimento de modelos, contador de cota, bloqueio de envio repetido e bloqueio de "não contatar".
+- **Automáticos:** extração de e-mails e WhatsApp, classificação de telefones, preenchimento de modelos, contador de cota, reabertura de pedido sem nenhuma consulta ao Google, bloqueio de envio repetido e bloqueio de "não contatar".
 - **Integração:** Google e Gmail simulados, para não gastar cota nem enviar e-mails reais.
 - **Banco:** as regras de acesso recusam quem não está logado ou é de outro domínio. Uma verificação confirma que nenhuma tabela tem nome, endereço ou telefone do Google.
-- **Teste real controlado:** poucas buscas, com envios apenas para endereços da própria agência e uma abertura real do link do WhatsApp em celular e computador.
+- **Teste real controlado:** limites diários conferidos no painel do Google e poucas buscas, com envios apenas para endereços da própria agência e uma abertura real do link do WhatsApp em celular e computador.
 - **Validação com o time:** cerca de 20 buscas reais medem quantos fornecedores trazem canal utilizável e quanto tempo leva pedir orçamento a 10 deles, que é o critério de sucesso.
 
 ## Pré-requisitos e pendências
 
-A implementação precisa de quatro acessos da agência, que só ela pode providenciar.
+A implementação depende de quatro itens da agência, e o último pode interromper o projeto.
 
 - [ ] Projeto no Google Cloud pertencente à organização Workspace, com faturamento e cartão cadastrados
 - [ ] Administrador do Workspace disponível para configurar o app interno
 - [ ] Projeto no Supabase, criado na conta existente
-- [ ] Domínio de e-mail da agência, para restringir o login
+- [ ] Confirmação no painel do Google de que Text Search e Place Details aceitam o limite de 32 por dia. O nome desse limite só foi visto em guias de terceiros. Sem ele, a garantia de nenhuma cobrança não existe e a implementação para antes de qualquer código
 
 **Riscos que continuam abertos:**
 
