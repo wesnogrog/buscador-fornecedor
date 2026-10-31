@@ -1,0 +1,25 @@
+{
+  "name": "buscador-fornecedor-scraper",
+  "version": "1.0.0",
+  "description": "Google Maps supplier scraper for Agência Surtô",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "node --watch main.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "google-maps",
+    "scraper",
+    "supplier",
+    "leads"
+  ],
+  "author": "Agência Surtô",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {}
+}
