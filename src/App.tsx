@@ -35,7 +35,8 @@ function AppContent() {
         <Route path="/resultados" element={<Resultados />} />
         <Route path="/mensagem" element={<Mensagem />} />
         <Route path="/envio" element={<Envio />} />
-        <Route path="/pedidos" element={<Pedidos />} />
+        <Route path="/pedidos" element={<SavedRequests />} />
+        <Route path="/pedido/:pedidoId" element={<PedidoDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
