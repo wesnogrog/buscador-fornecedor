@@ -29,7 +29,7 @@ describe('fillTemplate', () => {
 
     const result = fillTemplate(template, fields);
     expect(result).toBe(
-      'Olá Fornecedor ABC, gostaria de um orçamento para Catering no dia 2024-12-15 em São Paulo.'
+      'Olá Fornecedor ABC, gostaria de um orçamento para Catering no dia 15/12/2024 em São Paulo.'
     );
   });
 
@@ -46,7 +46,7 @@ describe('fillTemplate', () => {
     };
 
     const result = fillTemplate(template, fields);
-    expect(result).toBe('Nome Fornecedor\nServiço\nEvento\n2024-12-15\nLocal\nPrazo');
+    expect(result).toBe('Nome Fornecedor\nServiço\nEvento\n15/12/2024\nLocal\nPrazo');
   });
 
   test('handles missing fields with empty string', () => {

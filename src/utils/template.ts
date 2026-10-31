@@ -28,7 +28,10 @@ export function fillTemplate(template: string, fields: Partial<TemplateFields>):
 
   // Replace each placeholder with its value
   for (const placeholder of placeholders) {
-    const value = fields[placeholder] ?? '';
+    // The date field gives 2026-12-12; suppliers read 12/12/2026
+    const value = placeholder === 'data'
+      ? (fields.data ?? '').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1')
+      : fields[placeholder] ?? '';
     const regex = new RegExp(`\\{${placeholder}\\}`, 'g');
     result = result.replace(regex, value);
   }

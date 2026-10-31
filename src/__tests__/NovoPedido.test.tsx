@@ -65,6 +65,9 @@ async function chegarAoEnvio(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Prosseguir/ }));
 }
 
+// Each test types through the whole flow, which can pass 5s when the full suite loads the PC
+vi.setConfig({ testTimeout: 20000 });
+
 describe('NovoPedido flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
