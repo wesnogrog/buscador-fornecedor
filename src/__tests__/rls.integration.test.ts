@@ -2,20 +2,22 @@
  * Integration Tests for Row-Level Security (RLS)
  *
  * These tests verify that RLS policies actually work by testing with real
- * Supabase authentication tokens.
+ * Supabase authentication tokens created dynamically.
  *
- * To run these tests:
+ * Setup:
  * 1. Set up a Supabase project with the schema from supabase/migrations/001_initial.sql
- * 2. Create test users:
- *    - user1@agenciasurto.com (valid agencia user)
- *    - user2@agenciasurto.com (another valid agencia user)
- *    - user_external@gmail.com (user from wrong domain)
- * 3. Set environment variables:
+ * 2. Set environment variables:
  *    - SUPABASE_URL
  *    - SUPABASE_ANON_KEY
- *    - VITE_SUPABASE_URL
- *    - VITE_SUPABASE_ANON_KEY
- * 4. Run: npm run test:integration
+ *    - SUPABASE_SERVICE_KEY (optional, for automatic test user creation)
+ *    - VITE_SUPABASE_URL (alternative)
+ *    - VITE_SUPABASE_ANON_KEY (alternative)
+ *    - VITE_SUPABASE_SERVICE_KEY (alternative)
+ * 3. Run: npm run test:integration
+ *
+ * If SUPABASE_SERVICE_KEY is not available:
+ * - Tests will attempt to sign in with existing test users
+ * - Create test users manually or run: supabase/tests/setup-test-users.sql
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -31,22 +33,107 @@ describe('RLS: Row-Level Security Integration Tests', () => {
 
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const SUPABASE_SERVICE_KEY = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
+  // Test user credentials
+  const TEST_USERS = {
+    agencia1: {
+      email: 'user1@agenciasurto.com',
+      password: 'test123456Test!',
+    },
+    agencia2: {
+      email: 'user2@agenciasurto.com',
+      password: 'test123456Test!',
+    },
+    external: {
+      email: 'user_external@gmail.com',
+      password: 'test123456Test!',
+    },
+  };
+
+  /**
+   * Create test users using service role (admin API)
+   * Falls back gracefully if service key not available
+   */
+  async function ensureTestUsersExist() {
+    if (!SUPABASE_SERVICE_KEY) {
+      console.warn(
+        'SUPABASE_SERVICE_KEY not available. Tests will use existing users.\n' +
+          'If tests fail with auth errors, create test users manually:\n' +
+          '  1. Dashboard > Auth > Users\n' +
+          '  2. Create:',
+        TEST_USERS,
+        '\n  Or run: supabase/tests/setup-test-users.sql'
+      );
+      return;
+    }
+
+    const adminClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY);
+
+    for (const [key, user] of Object.entries(TEST_USERS)) {
+      try {
+        // Try to create user (will fail silently if already exists)
+        const { error: createError } = await adminClient.auth.admin.createUser({
+          email: user.email,
+          password: user.password,
+          email_confirm: true,
+        });
+
+        if (createError && !createError.message.includes('already registered')) {
+          console.warn(`Warning creating test user ${user.email}:`, createError.message);
+        } else if (!createError) {
+          console.log(`Created test user: ${user.email}`);
+        }
+      } catch (err) {
+        console.warn(`Error ensuring test user ${user.email} exists:`, err);
+      }
+    }
+  }
 
   beforeAll(async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error('Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_ANON_KEY');
+      throw new Error(
+        'Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_* variants)'
+      );
     }
+
+    // Ensure test users exist (creates if service key available)
+    await ensureTestUsersExist();
 
     // Anonymous client (no authentication)
     supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Simulated authenticated clients
-    // Note: In a real test environment, these would be created using actual
-    // Supabase auth tokens from test users
-    supabaseAgencia = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Create authenticated clients and sign in with real credentials
     supabaseUser1 = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { error: error1 } = await supabaseUser1.auth.signInWithPassword(
+      TEST_USERS.agencia1.email,
+      TEST_USERS.agencia1.password
+    );
+    if (error1) {
+      throw new Error(`Failed to authenticate user1: ${error1.message}`);
+    }
+
     supabaseUser2 = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { error: error2 } = await supabaseUser2.auth.signInWithPassword(
+      TEST_USERS.agencia2.email,
+      TEST_USERS.agencia2.password
+    );
+    if (error2) {
+      throw new Error(`Failed to authenticate user2: ${error2.message}`);
+    }
+
+    // External user (wrong domain - should fail RLS checks)
     supabaseExternal = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { error: errorExt } = await supabaseExternal.auth.signInWithPassword(
+      TEST_USERS.external.email,
+      TEST_USERS.external.password
+    );
+    if (errorExt) {
+      throw new Error(`Failed to authenticate external user: ${errorExt.message}`);
+    }
+
+    // supabaseAgencia is an alias for supabaseUser1
+    supabaseAgencia = supabaseUser1;
   });
 
   describe('TEST 1: Anonymous User Cannot SELECT from Any Table', () => {
@@ -327,18 +414,117 @@ describe('RLS: Row-Level Security Integration Tests', () => {
 /**
  * RUNNING THESE TESTS
  *
- * 1. Set up environment variables:
+ * ============================================================================
+ * SETUP (Choose One Option)
+ * ============================================================================
+ *
+ * OPTION A: Automatic (with Service Role Key) - RECOMMENDED
+ * ─────────────────────────────────────────────────────────────────────────
+ * 1. Get SUPABASE_SERVICE_KEY from your Supabase project:
+ *    - Dashboard > Settings > API > service_role Key
+ *    - Copy the entire key (it's long and starts with "eyJ...")
+ *
+ * 2. Set environment variables:
  *    export SUPABASE_URL="https://your-project.supabase.co"
  *    export SUPABASE_ANON_KEY="your-anon-key"
- *
- * 2. Create test users in Supabase:
- *    - user1@agenciasurto.com
- *    - user2@agenciasurto.com
- *    - user_external@gmail.com
+ *    export SUPABASE_SERVICE_KEY="your-service-role-key"
  *
  * 3. Run tests:
  *    npm run test:integration
  *
- * 4. For development, use:
+ *    The tests will automatically:
+ *    - Create test users (or use existing ones)
+ *    - Authenticate with each user
+ *    - Run RLS verification
+ *
+ * OPTION B: Manual Setup (without Service Role Key)
+ * ─────────────────────────────────────────────────────────────────────────
+ * 1. Set environment variables (without SERVICE_KEY):
+ *    export SUPABASE_URL="https://your-project.supabase.co"
+ *    export SUPABASE_ANON_KEY="your-anon-key"
+ *
+ * 2. Create test users manually:
+ *    - Open: supabase/tests/setup-test-users.sql
+ *    - Copy the entire script
+ *    - Paste in Supabase Dashboard > SQL Editor > New Query
+ *    - Click "Run"
+ *
+ *    Created users:
+ *    - user1@agenciasurto.com (password: test123456Test!)
+ *    - user2@agenciasurto.com (password: test123456Test!)
+ *    - user_external@gmail.com (password: test123456Test!)
+ *
+ * 3. Run tests:
+ *    npm run test:integration
+ *
+ * ============================================================================
+ * DEVELOPMENT
+ * ============================================================================
+ *
+ * Watch mode (auto-rerun on file changes):
  *    npm run test:integration:watch
+ *
+ * Run specific test:
+ *    npm run test:integration -- --grep "TEST 3"
+ *
+ * ============================================================================
+ * WHAT THESE TESTS VERIFY
+ * ============================================================================
+ *
+ * TEST 1: Anonymous User Cannot SELECT from Any Table
+ *   - Verifies RLS denies unauthenticated access
+ *   - Expected: permission denied errors
+ *
+ * TEST 2: User with Non-@agenciasurto.com Email Cannot SELECT
+ *   - Verifies RLS denies wrong-domain users
+ *   - user_external@gmail.com tries to access
+ *   - Expected: permission denied errors
+ *
+ * TEST 3: Agencia User (@agenciasurto.com) Can SELECT fornecedores
+ *   - Verifies RLS allows valid users to read suppliers
+ *   - Can also filter by region and service
+ *   - Expected: success, returns supplier data
+ *
+ * TEST 4: Agencia User Can INSERT and READ Own Pedidos
+ *   - Verifies users can create requests
+ *   - Verifies users can only see their own requests
+ *   - Verifies INSERT/UPDATE/DELETE work on own records
+ *   - Expected: success
+ *
+ * TEST 5: User Cannot READ Other User's Credentials
+ *   - Verifies complete isolation of credenciais_gmail table
+ *   - user2 tries to read user1's credentials
+ *   - Expected: permission denied or empty result
+ *
+ * TEST 6: User Cannot INSERT into fornecedores (RLS Blocks)
+ *   - Verifies suppliers table is read-only for users
+ *   - Only service role can insert (for scraper)
+ *   - Expected: permission denied errors
+ *
+ * Additional Tests:
+ *   - Shared visibility of pedidos between agencia users
+ *   - Shared visibility of email templates (modelos)
+ *   - Foreign key constraint enforcement
+ *
+ * ============================================================================
+ * TROUBLESHOOTING
+ * ============================================================================
+ *
+ * "auth.signInWithPassword failed":
+ *   - Test users don't exist
+ *   - Solution: Run setup-test-users.sql (Option B)
+ *   - Or provide SUPABASE_SERVICE_KEY (Option A)
+ *
+ * "permission denied" on all tests:
+ *   - RLS policies are correctly blocking access
+ *   - Check that users are actually authenticated
+ *   - Verify auth.jwt() contains correct email in RLS policy
+ *
+ * "Missing Supabase credentials" error:
+ *   - Set SUPABASE_URL and SUPABASE_ANON_KEY env vars
+ *   - These are from: Supabase Dashboard > Settings > API
+ *
+ * Connection refused:
+ *   - Check SUPABASE_URL is correct
+ *   - Verify internet connection to Supabase
  */

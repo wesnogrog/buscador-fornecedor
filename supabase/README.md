@@ -71,10 +71,45 @@ Expected output:
 
 #### Integration Tests (TypeScript + Vitest)
 
-Tests for authentication and RLS enforcement should be run from the main application:
+Tests verify actual RLS enforcement with real authentication:
+
+**Setup (Choose One)**:
+
+Option A: Automatic (with Service Role Key - RECOMMENDED)
 ```bash
-npm run test:db
+# Get SUPABASE_SERVICE_KEY from Dashboard > Settings > API > service_role Key
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_ANON_KEY="your-anon-key"
+export SUPABASE_SERVICE_KEY="your-service-role-key"
+npm run test:integration
 ```
+Tests will automatically create test users and run.
+
+Option B: Manual Setup (without Service Role Key)
+```bash
+# Run setup script in Supabase Dashboard > SQL Editor
+# Copy supabase/tests/setup-test-users.sql and paste in SQL Editor
+
+# Then set env vars and run
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_ANON_KEY="your-anon-key"
+npm run test:integration
+```
+
+Test users created:
+- `user1@agenciasurto.com` (password: `test123456Test!`)
+- `user2@agenciasurto.com` (password: `test123456Test!`)
+- `user_external@gmail.com` (password: `test123456Test!`)
+
+**What's tested**:
+- Anonymous user cannot access any table
+- User with wrong domain (@gmail.com) is blocked by RLS
+- Valid agencia users can read suppliers (fornecedores)
+- Users can create and read their own requests (pedidos)
+- Users cannot access other users' Gmail credentials
+- Users cannot modify suppliers (read-only via RLS)
+
+See `src/__tests__/rls.integration.test.ts` for detailed test scenarios.
 
 ### Key Database Features
 
@@ -145,10 +180,14 @@ This shows what would be applied. If policies are missing, re-run `supabase db p
 ```
 supabase/
 ├── migrations/
-│   └── 001_initial.sql          # Main schema migration
+│   └── 001_initial.sql              # Main schema migration
 ├── tests/
-│   └── 001_rls.test.sql         # RLS policy tests
-└── README.md                    # This file
+│   ├── 001_rls.test.sql             # RLS policy structural tests
+│   ├── 002_rls_functional.test.sql  # RLS functional verification
+│   └── setup-test-users.sql         # Manual test user creation
+├── README.md                        # This file
+└── ../src/__tests__/
+    └── rls.integration.test.ts      # Vitest integration tests (real auth)
 ```
 
 ### References
