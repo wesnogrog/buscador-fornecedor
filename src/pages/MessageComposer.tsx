@@ -12,6 +12,7 @@
 import React, { useEffect } from 'react';
 import { useMessageCompose } from '../hooks/useMessageCompose';
 import { MessagePreview } from '../components/MessagePreview';
+import { getMissingFields } from '../utils/template';
 import type { Modelo, Fornecedor, Pedido } from '../utils/types';
 
 interface MessageComposerProps {
@@ -50,7 +51,10 @@ export function MessageComposer({
   }, [messageCompose.selectedTemplate, messageCompose.fields]);
 
   const selectedSuppliers = suppliers.filter((s) => selectedSupplierIds.includes(s.id));
-  const canProceed = messageCompose.selectedTemplate !== null;
+  const missingFields = messageCompose.selectedTemplate
+    ? getMissingFields(messageCompose.selectedTemplate.corpo, messageCompose.fields)
+    : [];
+  const canProceed = messageCompose.selectedTemplate !== null && missingFields.length === 0;
 
   const handleProceed = () => {
     if (messageCompose.selectedTemplate) {
@@ -229,6 +233,15 @@ export function MessageComposer({
             )}
           </div>
         </div>
+
+        {/* Validation Message */}
+        {messageCompose.selectedTemplate && missingFields.length > 0 && (
+          <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
+            <p className="text-sm text-red-800">
+              <strong>Campos obrigatórios:</strong> Complete os campos: {missingFields.join(', ')}
+            </p>
+          </div>
+        )}
 
         {/* Navigation Buttons */}
         <div className="mt-12 flex justify-between items-center">

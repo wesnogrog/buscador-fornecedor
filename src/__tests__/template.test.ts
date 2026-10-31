@@ -3,8 +3,8 @@
  * Tests dynamic field replacement in email templates with supplier names
  */
 
-import { describe, it, expect } from 'vitest';
-import { fillTemplate } from '../utils/template';
+import { describe, it, expect, test } from 'vitest';
+import { fillTemplate, getMissingFields, getTemplatePlaceholders } from '../utils/template';
 
 describe('fillTemplate', () => {
   test('fills single placeholder', () => {
@@ -189,5 +189,137 @@ Prazo: {prazo}`;
 
     const result = fillTemplate(template, fields);
     expect(result).toBe('Evento: "   "');
+  });
+});
+
+describe('getMissingFields', () => {
+  test('returns empty array when all required fields are provided', () => {
+    const template = 'Olá {fornecedor}, gostaria de um orçamento para {servico}.';
+    const fields = {
+      fornecedor: 'Empresa A',
+      servico: 'Locação de Som',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual([]);
+  });
+
+  test('returns missing fields when some are empty', () => {
+    const template = 'Olá {fornecedor}, {servico} em {data}';
+    const fields = {
+      fornecedor: 'Empresa A',
+      servico: '',
+      data: '2024-12-15',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual(['servico']);
+  });
+
+  test('returns multiple missing fields', () => {
+    const template = '{fornecedor} {servico} {data} {local} {evento} {prazo}';
+    const fields = {
+      fornecedor: '',
+      servico: '',
+      data: '',
+      local: 'São Paulo',
+      evento: 'Workshop',
+      prazo: '',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual(['fornecedor', 'servico', 'data', 'prazo']);
+  });
+
+  test('ignores fields not used in template', () => {
+    const template = 'Olá {fornecedor}, {servico}';
+    const fields = {
+      fornecedor: 'Empresa A',
+      servico: '',
+      data: '2024-12-15',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual(['servico']);
+  });
+
+  test('returns all missing fields when template has all placeholders', () => {
+    const template = '{fornecedor} {servico} {evento} {data} {local} {prazo}';
+    const fields = {
+      fornecedor: '',
+      servico: '',
+      evento: '',
+      data: '',
+      local: '',
+      prazo: '',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual(['fornecedor', 'servico', 'evento', 'data', 'local', 'prazo']);
+  });
+
+  test('handles undefined fields as missing', () => {
+    const template = 'Olá {fornecedor}, {servico}';
+    const fields = {
+      fornecedor: 'Empresa A',
+    };
+
+    const result = getMissingFields(template, fields as any);
+    expect(result).toEqual(['servico']);
+  });
+
+  test('returns empty array when template has no placeholders', () => {
+    const template = 'Este é um texto fixo sem placeholders.';
+    const fields = {
+      fornecedor: '',
+      servico: '',
+    };
+
+    const result = getMissingFields(template, fields);
+    expect(result).toEqual([]);
+  });
+});
+
+describe('getTemplatePlaceholders', () => {
+  test('extracts single placeholder', () => {
+    const template = 'Olá {fornecedor}';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual(['fornecedor']);
+  });
+
+  test('extracts multiple placeholders', () => {
+    const template = 'Olá {fornecedor}, {servico} em {data}';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual(['fornecedor', 'servico', 'data']);
+  });
+
+  test('extracts all supported placeholders', () => {
+    const template = '{fornecedor} {servico} {evento} {data} {local} {prazo}';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual(['fornecedor', 'servico', 'evento', 'data', 'local', 'prazo']);
+  });
+
+  test('returns empty array when no placeholders found', () => {
+    const template = 'Este é um texto fixo sem placeholders.';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual([]);
+  });
+
+  test('handles repeated placeholders', () => {
+    const template = '{fornecedor} solicita {servico}. Obrigado, {fornecedor}.';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual(['fornecedor', 'servico']);
+  });
+
+  test('ignores case-mismatched placeholders', () => {
+    const template = 'Olá {Fornecedor} e {SERVICO}';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual([]);
+  });
+
+  test('extracts placeholders with surrounding text', () => {
+    const template = 'Prezado(a) Sr(a) {fornecedor}, solicitamos um orçamento para {servico} no local: {local}';
+    const result = getTemplatePlaceholders(template);
+    expect(result).toEqual(['fornecedor', 'servico', 'local']);
   });
 });

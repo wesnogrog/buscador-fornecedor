@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { fillTemplate, type TemplateFields } from '../utils/template';
+import { fillTemplate, getMissingFields, type TemplateFields } from '../utils/template';
 import type { Modelo } from '../utils/types';
 
 export function useMessageCompose(templates: Modelo[]) {
@@ -68,6 +68,21 @@ export function useMessageCompose(templates: Modelo[]) {
     setPreviews({});
   }, []);
 
+  const validate = useCallback(() => {
+    if (!selectedTemplate) {
+      return {
+        hasErrors: true,
+        missingFields: [],
+      };
+    }
+
+    const missing = getMissingFields(selectedTemplate.corpo, fields);
+    return {
+      hasErrors: missing.length > 0,
+      missingFields: missing,
+    };
+  }, [selectedTemplate, fields]);
+
   return {
     selectedTemplate,
     fields,
@@ -76,5 +91,6 @@ export function useMessageCompose(templates: Modelo[]) {
     updateField,
     generatePreview,
     clear,
+    validate,
   };
 }
