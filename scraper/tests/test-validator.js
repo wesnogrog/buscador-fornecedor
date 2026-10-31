@@ -43,6 +43,20 @@ describe('validateEmail', () => {
   });
 });
 
+describe('classifyPhone with the long-distance zero', () => {
+  it('recognizes a mobile as Google Maps gives it', () => {
+    assert.deepStrictEqual(classifyPhone('019999953561'), { type: 'celular', number: '5519999953561' });
+  });
+
+  it('recognizes a landline as Google Maps gives it', () => {
+    assert.deepStrictEqual(classifyPhone('01932137952'), { type: 'fixo', number: '551932137952' });
+  });
+
+  it('keeps 0800 numbers out of the mobile and landline types', () => {
+    assert.strictEqual(classifyPhone('08001234567').type, 'outro');
+  });
+});
+
 describe('classifyPhone', () => {
   it('classifies Brazilian mobile (11-digit, 9th digit is 9)', () => {
     const result = classifyPhone('11999887766');

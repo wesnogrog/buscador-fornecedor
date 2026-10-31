@@ -88,6 +88,11 @@ function classifyPhone(phone) {
       normalizedPhone = normalizedPhone.substring(2);
     }
 
+    // Google Maps gives the long-distance zero (019...). Numbers like 0800 stay as they are
+    if (/^0[1-9][1-9]/.test(normalizedPhone)) {
+      normalizedPhone = normalizedPhone.substring(1);
+    }
+
     // Validate length: must be 10 (fixo) or 11 (celular)
     if (normalizedPhone.length !== 10 && normalizedPhone.length !== 11) {
       return { type: 'outro' };
