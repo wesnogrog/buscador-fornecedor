@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import type { Fornecedor } from '../utils/types';
-import { sortSuppliers, filterSuppliers, groupByIndicator } from '../utils/suppliers';
+import { sortSuppliers, filterSuppliersLocally, groupByIndicator } from '../utils/suppliers';
 import { indicatorLabels } from '../utils/indicators';
 import SupplierCard from '../components/SupplierCard';
 import { useSupplierSelection } from '../hooks/useSupplierSelection';
@@ -43,7 +43,7 @@ export function Results({
   const [viewMode, setViewMode] = useState<'sorted' | 'grouped'>('sorted');
 
   // Filter suppliers by search term
-  const filteredSuppliers = filterSuppliers(initialSuppliers, searchTerm);
+  const filteredSuppliers = filterSuppliersLocally(initialSuppliers, searchTerm);
 
   // Sort by priority
   const sortedSuppliers = sortSuppliers(filteredSuppliers);
