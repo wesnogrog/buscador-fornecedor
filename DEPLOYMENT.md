@@ -173,7 +173,8 @@ A Workspace administrator may need to approve the app.
 ### 4.2 Enable Google in Supabase
 
 1. In Authentication > Providers, enable **Google** and paste the client ID and secret.
-2. In Authentication > URL Configuration, set the Site URL to the production URL and add `http://localhost:5173` to the redirect URLs.
+2. In the same screen, disable **Email**: the app only logs in with Google.
+3. In Authentication > URL Configuration, set the Site URL to the production URL and add `http://localhost:5173` to the redirect URLs.
 
 ### 4.3 Apply the database and deploy the functions
 
@@ -189,9 +190,7 @@ Changing `GMAIL_ENCRYPTION_KEY` later makes the saved credentials unreadable, an
 
 ### 4.4 Run the RLS tests
 
-```bash
-SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... npm run test:integration
-```
+Paste `supabase/tests/rls_comportamento.test.sql` into the Supabase SQL Editor and run it. It simulates each kind of user and rolls everything back, so it leaves nothing in the database.
 
 ## Step 5: Custom Domain (Optional)
 

@@ -69,47 +69,18 @@ Expected output:
 - ✓ Policies are created for each table
 - ✓ Indexes are created for performance
 
-#### Integration Tests (TypeScript + Vitest)
+#### Behavior Tests (SQL Editor)
 
-Tests verify actual RLS enforcement with real authentication:
-
-**Setup (Choose One)**:
-
-Option A: Automatic (with Service Role Key - RECOMMENDED)
-```bash
-# Get SUPABASE_SERVICE_KEY from Dashboard > Settings > API > service_role Key
-export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_ANON_KEY="your-anon-key"
-export SUPABASE_SERVICE_KEY="your-service-role-key"
-npm run test:integration
-```
-Tests will automatically create test users and run.
-
-Option B: Manual Setup (without Service Role Key)
-```bash
-# Run setup script in Supabase Dashboard > SQL Editor
-# Copy supabase/tests/setup-test-users.sql and paste in SQL Editor
-
-# Then set env vars and run
-export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_ANON_KEY="your-anon-key"
-npm run test:integration
-```
-
-Test users created:
-- `user1@agenciasurto.com` (password: `test123456Test!`)
-- `user2@agenciasurto.com` (password: `test123456Test!`)
-- `user_external@gmail.com` (password: `test123456Test!`)
+Paste `supabase/tests/rls_comportamento.test.sql` into Dashboard > SQL Editor and run it. It simulates each kind of user inside a transaction that is rolled back, so it creates no real users and leaves nothing in the database. A failure stops with an error naming the broken rule.
 
 **What's tested**:
-- Anonymous user cannot access any table
+- Anonymous user cannot read suppliers or credentials
 - User with wrong domain (@gmail.com) is blocked by RLS
-- Valid agencia users can read suppliers (fornecedores)
-- Users can create and read their own requests (pedidos)
+- Valid agencia users can read suppliers (fornecedores) but not change them
+- Users can create pedidos only in their own name
+- Colleagues can see a pedido, its suppliers and its sends, but cannot change them
 - Users cannot access other users' Gmail credentials
-- Users cannot modify suppliers (read-only via RLS)
-
-See `src/__tests__/rls.integration.test.ts` for detailed test scenarios.
+- A successful send marks the supplier as sent and keeps "nao_contatar"
 
 ### Key Database Features
 
@@ -124,9 +95,9 @@ All tables have RLS enabled with the following policies:
 2. **Table-Specific Policies**:
    - **fornecedores**: Read-only (scraper inserts via service role)
    - **pedidos**: Read all, write own
-   - **pedido_fornecedores**: Read linked to user's pedidos, write own
+   - **pedido_fornecedores**: Read all (shared), write linked to user's pedidos
    - **modelos**: Read all (shared), write own
-   - **envios**: Read linked to user's pedidos, write own
+   - **envios**: Read all (shared), write linked to user's pedidos
    - **credenciais_gmail**: Read/write own only
 
 #### Encryption for Gmail Credentials
@@ -169,25 +140,20 @@ This shows what would be applied. If policies are missing, re-run `supabase db p
 
 #### Cannot authenticate with @agenciasurto.com email
 
-1. Check Supabase Auth settings:
-   - Go to **Authentication** > **Providers** > **Email**
-   - Ensure email auth is enabled
-2. Sign up with your @agenciasurto.com email address
-3. Confirm email in Supabase dashboard or check email for confirmation link
+Login only works with Google. Check that **Authentication** > **Providers** > **Google** is enabled and has the client ID and secret.
 
 ### Files Structure
 
 ```
 supabase/
 ├── migrations/
-│   └── 001_initial.sql              # Main schema migration
+│   ├── 001_initial.sql              # Main schema migration
+│   ├── 002_marcar_enviado.sql       # Marks suppliers as sent
+│   └── 003_pedidos_compartilhados.sql # Shares pedidos with the team
 ├── tests/
 │   ├── 001_rls.test.sql             # RLS policy structural tests
-│   ├── 002_rls_functional.test.sql  # RLS functional verification
-│   └── setup-test-users.sql         # Manual test user creation
-├── README.md                        # This file
-└── ../src/__tests__/
-    └── rls.integration.test.ts      # Vitest integration tests (real auth)
+│   └── rls_comportamento.test.sql   # RLS behavior tests (rolled back)
+└── README.md                        # This file
 ```
 
 ### References
