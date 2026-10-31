@@ -85,7 +85,7 @@ O banco guarda o identificador do Google e os dados próprios da agência, mas n
 | --- | --- |
 | `pedidos` | Nome do orçamento, serviço, região, data, local, prazo e autor |
 | `pedido_fornecedores` | `place_id` e situação do fornecedor em cada pedido |
-| `fornecedor_contatos` | `place_id`, nome, e-mail e WhatsApp encontrados no site, data da verificação e marca "não contatar" |
+| `fornecedor_contatos` | `place_id`, nome, domínio, e-mail e WhatsApp encontrados no site, data da verificação e marca "não contatar" |
 | `modelos` | Textos reutilizáveis, com os campos ainda sem preencher |
 | `envios` | Canal, autor, data, situação e modelo usado, com `{fornecedor}` sem preencher |
 | `cota_uso` | Consultas usadas por dia do Google e por faixa de preço da API |
