@@ -224,14 +224,15 @@ export function SearchForm({ onContinue }: SearchFormProps = {}): JSX.Element {
         )}
 
         {/* No Results Message */}
-        {!form.loading && form.suppliers.length === 0 && form.servico && !form.error && (
+        {!form.loading && form.suppliers.length === 0 && form.searchedFor && !form.error && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
             <p className="text-yellow-800">
-              Nenhum fornecedor encontrado com o serviço "<strong>{form.servico}</strong>"
-              {form.regiao && ` na região "${form.regiao}"`}.
+              Ainda não temos fornecedores salvos para "<strong>{form.searchedFor.servico}</strong>"
+              {form.searchedFor.regiao && ` na região "${form.searchedFor.regiao}"`}.
             </p>
-            <p className="text-sm text-yellow-600 mt-2">
-              Tente outro serviço ou execute o scraper para buscar novos fornecedores.
+            <p className="text-sm text-yellow-700 mt-2">
+              Esta busca só mostra fornecedores já coletados do Google Maps. Tente outro termo ou peça a
+              coleta desse serviço e região.
             </p>
           </div>
         )}

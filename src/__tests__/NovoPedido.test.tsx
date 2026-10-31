@@ -152,6 +152,18 @@ describe('NovoPedido flow', () => {
     expect(await screen.findByText('✓ Enviei')).toBeInTheDocument();
   });
 
+  it('says nothing was found only after a search, not while typing', async () => {
+    vi.mocked(filterSuppliers).mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<MemoryRouter><NovoPedido /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText(/Serviço/i), 'som');
+    expect(screen.queryByText(/Ainda não temos fornecedores/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Buscar Fornecedores/i }));
+    expect(await screen.findByText(/Ainda não temos fornecedores/)).toBeInTheDocument();
+  });
+
   it('sends by the chosen channel only', async () => {
     vi.mocked(filterSuppliers).mockResolvedValue([
       fornecedor('Som Dois', { email: 'dois@example.com', whatsapp_numero: '5511999887766' }),

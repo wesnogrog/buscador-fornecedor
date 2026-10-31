@@ -181,7 +181,7 @@ describe('SearchForm component', () => {
       await user.click(searchButton)
 
       await waitFor(() => {
-        expect(screen.getByText(/nenhum fornecedor/i)).toBeInTheDocument()
+        expect(screen.getByText(/ainda não temos fornecedores/i)).toBeInTheDocument()
       })
     })
 

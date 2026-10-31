@@ -14,6 +14,8 @@ export interface SearchFormState {
   suppliers: Fornecedor[]
   loading: boolean
   error: string | null
+  /** The last completed search, so "nothing found" never appears before a search */
+  searchedFor: { servico: string; regiao: string } | null
 }
 
 export interface SearchFormActions {
@@ -37,6 +39,7 @@ export function useSearchForm(): UseSearchFormReturn {
   const [suppliers, setSuppliers] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [searchedFor, setSearchedFor] = useState<SearchFormState['searchedFor']>(null)
 
   /**
    * Search for suppliers matching the form criteria
@@ -46,15 +49,18 @@ export function useSearchForm(): UseSearchFormReturn {
     if (!servico || servico.trim() === '') {
       setError('Por favor, preencha o serviço')
       setSuppliers([])
+      setSearchedFor(null)
       return
     }
 
     setLoading(true)
     setError(null)
+    setSearchedFor(null)
 
     try {
       const results = await filterSuppliers(servico, regiao || null)
       setSuppliers(results)
+      setSearchedFor({ servico: servico.trim(), regiao: regiao.trim() })
 
       if (results.length === 0) {
         setError(null) // No error, just no results
@@ -77,6 +83,7 @@ export function useSearchForm(): UseSearchFormReturn {
     setRegiao('')
     setSuppliers([])
     setError(null)
+    setSearchedFor(null)
   }, [])
 
   return {
@@ -86,6 +93,7 @@ export function useSearchForm(): UseSearchFormReturn {
     suppliers,
     loading,
     error,
+    searchedFor,
     setOrcamento_nome,
     setServico,
     setRegiao,
