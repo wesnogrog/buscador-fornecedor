@@ -15,6 +15,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
+import { decryptCredential } from './crypto.ts';
+
 // Gmail API constants
 const GMAIL_API_BASE = 'https://www.googleapis.com/gmail/v1/users/me';
 const GOOGLE_OAUTH_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
@@ -36,23 +38,6 @@ interface SendEmailResponse {
   error?: string;
 }
 
-interface DecryptedCredential {
-  refresh_token: string;
-  client_id: string;
-  client_secret: string;
-}
-
-/**
- * Decrypt the encrypted Gmail credential using AES-GCM
- */
-async function decryptCredential(
-  encryptedData: Uint8Array,
-  encryptionKey: string
-): Promise<DecryptedCredential> {
-  // This would typically use Web Crypto API or a library like TweetNaCl
-  // For now, we'll throw an error indicating server-side implementation needed
-  throw new Error('Credential decryption must be implemented server-side');
-}
 
 /**
  * Get a fresh access token using the refresh token
@@ -191,7 +176,7 @@ serve(async (req) => {
 
     // Decrypt the credentials
     const decrypted = await decryptCredential(
-      credentialRecord.credencial_criptografada as Uint8Array,
+      credentialRecord.credencial_criptografada as Uint8Array | string,
       encryptionKey
     );
 
