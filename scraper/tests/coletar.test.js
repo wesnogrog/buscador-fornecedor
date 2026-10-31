@@ -4,6 +4,22 @@
 
 import assert from 'assert';
 import { processarColetas } from '../coletar.js';
+import { isInRegion } from '../googleMaps.js';
+
+describe('isInRegion', () => {
+  it('finds the region in the address, ignoring case and accents', () => {
+    assert.strictEqual(isInRegion('Rua A, 10 - Centro, Niterói - RJ', 'niteroi'), true);
+    assert.strictEqual(isInRegion('Av. das Américas, 500 - Barra da Tijuca, Rio de Janeiro', 'BARRA DA TIJUCA'), true);
+  });
+
+  it('rejects a place in another city with a similar name', () => {
+    assert.strictEqual(isInRegion('R. Srg. Plauska, 253 - Ano Bom, Barra Mansa - RJ', 'Barra da Tijuca'), false);
+  });
+
+  it('rejects a place with no address', () => {
+    assert.strictEqual(isInRegion('', 'Niterói'), false);
+  });
+});
 
 /** In-memory stand-in for the coletas table */
 function fakeSupabase(rows) {

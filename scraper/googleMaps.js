@@ -30,6 +30,17 @@ function toPublicWebsite(url) {
 }
 
 /**
+ * Checks whether an address is in the requested region, ignoring case and accents
+ * @param {string} address - Address from the listing
+ * @param {string} region - Requested region
+ * @returns {boolean}
+ */
+function isInRegion(address, region) {
+  const normalize = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  return normalize(address).includes(normalize(region));
+}
+
+/**
  * Throws if Google refused the request
  * @param {Page} page - Puppeteer page
  */
@@ -95,20 +106,38 @@ async function searchSuppliers(browser, service, region, maxResults = parseInt(p
       console.error('[ERROR] Page error:', err.message);
     });
 
-    const searchQuery = `${service} em ${region}`;
-    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}?hl=pt-BR`;
+    // Servers outside Brazil get results biased by their location, so the country is explicit
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'pt-BR,pt;q=0.9' });
+    const searchQueries = [`${service} em ${region}`, `${service} em ${region}, Brasil`];
+    let hasList = false;
 
-    console.log(`[INFO] Navigating to Google Maps: ${mapsUrl}`);
-    await page.goto(mapsUrl, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT_MS });
-    await dismissConsent(page);
-    await assertNotBlocked(page);
+    for (const searchQuery of searchQueries) {
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}?hl=pt-BR&gl=br`;
 
-    // A search shows a list; a search with one match goes straight to the place
-    await page.waitForSelector('[role="feed"], button[data-item-id="address"]', { timeout: LOAD_TIMEOUT_MS });
+      console.log(`[INFO] Navigating to Google Maps: ${mapsUrl}`);
+      await page.goto(mapsUrl, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT_MS });
+      await dismissConsent(page);
+      await assertNotBlocked(page);
 
-    if (!(await page.$('[role="feed"]'))) {
+      // A search shows a list; a search with one match goes straight to the place
+      await page.waitForSelector('[role="feed"], button[data-item-id="address"]', { timeout: LOAD_TIMEOUT_MS });
+
+      if (await page.$('[role="feed"]')) {
+        hasList = true;
+        break;
+      }
+
+      // Google's single guess can be in another city: keep it only if it is in the region
       const place = await readPlace(page);
-      return place ? [place] : [];
+      if (place && isInRegion(place.address, region)) {
+        return [place];
+      }
+      console.warn(`[WARN] Ignored a single result outside "${region}"`);
+      await randomDelay();
+    }
+
+    if (!hasList) {
+      return [];
     }
 
     // The list only loads more results as it scrolls
@@ -160,4 +189,4 @@ async function searchSuppliers(browser, service, region, maxResults = parseInt(p
   }
 }
 
-export { searchSuppliers, toPublicWebsite };
+export { searchSuppliers, toPublicWebsite, isInRegion };
