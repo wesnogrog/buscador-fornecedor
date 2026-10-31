@@ -230,7 +230,7 @@ describe('MessageComposer', () => {
     expect(proceedButton).toBeDisabled();
   });
 
-  test('enables proceed button when template is selected', async () => {
+  test('disables proceed until required fields are filled, then enables it', async () => {
     render(
       <MessageComposer
         templates={mockTemplates}
@@ -245,8 +245,44 @@ describe('MessageComposer', () => {
     const dropdown = screen.getByRole('combobox');
     await userEvent.selectOption(dropdown, 'template-1');
 
+    // template-1 requires {servico}, which is still empty
     const proceedButton = screen.getByRole('button', { name: /Prosseguir|Próximo|Enviar/i });
-    expect(proceedButton).not.toBeDisabled();
+    expect(proceedButton).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('Ex: Locação de Som'), 'Som');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Prosseguir|Próximo|Enviar/i })).not.toBeDisabled();
+    });
+  });
+
+  test('shows validation message with missing field names, and hides it once filled', async () => {
+    render(
+      <MessageComposer
+        templates={mockTemplates}
+        suppliers={mockSuppliers}
+        selectedSupplierIds={mockSelectedSupplierIds}
+        pedido={mockPedido}
+        onGoBack={() => {}}
+        onProceed={() => {}}
+      />
+    );
+
+    // No message before a template is selected
+    expect(screen.queryByText(/Campos obrigatórios/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOption(screen.getByRole('combobox'), 'template-2');
+
+    const message = screen.getByText(/Campos obrigatórios/i).closest('p');
+    expect(message).toHaveTextContent('servico, evento, data');
+    expect(message).not.toHaveTextContent('fornecedor');
+
+    await userEvent.type(screen.getByPlaceholderText('Ex: Locação de Som'), 'Som');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Campos obrigatórios/i).closest('p')).toHaveTextContent('evento, data');
+    });
+    expect(screen.getByText(/Campos obrigatórios/i).closest('p')).not.toHaveTextContent('servico');
   });
 
   test('calls onProceed with correct data when proceed is clicked', async () => {

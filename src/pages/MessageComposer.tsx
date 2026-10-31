@@ -12,7 +12,6 @@
 import React, { useEffect } from 'react';
 import { useMessageCompose } from '../hooks/useMessageCompose';
 import { MessagePreview } from '../components/MessagePreview';
-import { getMissingFields } from '../utils/template';
 import type { Modelo, Fornecedor, Pedido } from '../utils/types';
 
 interface MessageComposerProps {
@@ -51,9 +50,7 @@ export function MessageComposer({
   }, [messageCompose.selectedTemplate, messageCompose.fields]);
 
   const selectedSuppliers = suppliers.filter((s) => selectedSupplierIds.includes(s.id));
-  const missingFields = messageCompose.selectedTemplate
-    ? getMissingFields(messageCompose.selectedTemplate.corpo, messageCompose.fields)
-    : [];
+  const { missingFields } = messageCompose.validate();
   const canProceed = messageCompose.selectedTemplate !== null && missingFields.length === 0;
 
   const handleProceed = () => {

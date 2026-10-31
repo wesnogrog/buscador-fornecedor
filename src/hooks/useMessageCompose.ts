@@ -76,7 +76,10 @@ export function useMessageCompose(templates: Modelo[]) {
       };
     }
 
-    const missing = getMissingFields(selectedTemplate.corpo, fields);
+    // {fornecedor} is auto-filled per supplier, so the user never needs to provide it
+    const missing = getMissingFields(selectedTemplate.corpo, fields).filter(
+      (f) => f !== 'fornecedor'
+    );
     return {
       hasErrors: missing.length > 0,
       missingFields: missing,

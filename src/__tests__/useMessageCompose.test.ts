@@ -261,4 +261,63 @@ describe('useMessageCompose', () => {
     expect(preview1).toContain('Locação de Som');
     expect(preview2).toContain('Catering');
   });
+
+  describe('validate()', () => {
+    test('returns hasErrors true with no missing fields when no template selected', () => {
+      const { result } = renderHook(() => useMessageCompose(mockTemplates));
+
+      expect(result.current.validate()).toEqual({ hasErrors: true, missingFields: [] });
+    });
+
+    test('returns hasErrors true and missing fields when required fields are empty', () => {
+      const { result } = renderHook(() => useMessageCompose(mockTemplates));
+
+      act(() => {
+        result.current.selectTemplate('template-2');
+      });
+
+      const validation = result.current.validate();
+      expect(validation.hasErrors).toBe(true);
+      expect(validation.missingFields).toEqual(['servico', 'evento', 'data', 'local', 'prazo']);
+    });
+
+    test('returns hasErrors false and empty missingFields when fields are complete', () => {
+      const { result } = renderHook(() => useMessageCompose(mockTemplates));
+
+      act(() => {
+        result.current.selectTemplate('template-1');
+        result.current.updateField('servico', 'Locação de Som');
+      });
+
+      expect(result.current.validate()).toEqual({ hasErrors: false, missingFields: [] });
+    });
+
+    test('detects the specific field still missing', () => {
+      const { result } = renderHook(() => useMessageCompose(mockTemplates));
+
+      act(() => {
+        result.current.selectTemplate('template-2');
+        result.current.updateField('servico', 'Catering');
+        result.current.updateField('evento', 'Festa');
+        result.current.updateField('data', '15/12/2024');
+        result.current.updateField('prazo', '2 dias');
+      });
+
+      expect(result.current.validate()).toEqual({
+        hasErrors: true,
+        missingFields: ['local'],
+      });
+    });
+
+    test('does not require {fornecedor} since it is auto-filled', () => {
+      const { result } = renderHook(() => useMessageCompose(mockTemplates));
+
+      act(() => {
+        result.current.selectTemplate('template-1');
+      });
+
+      expect(result.current.validate().missingFields).not.toContain('fornecedor');
+      expect(result.current.validate().missingFields).toEqual(['servico']);
+    });
+  });
 });
