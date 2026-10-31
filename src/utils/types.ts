@@ -1,0 +1,193 @@
+/**
+ * TypeScript types for Buscador de Fornecedor database schema
+ * Generated from supabase/migrations/001_initial.sql
+ *
+ * All types are derived from the Supabase schema and include
+ * proper TypeScript interfaces for type safety.
+ */
+
+/**
+ * Fornecedor (Supplier)
+ * Stores extracted supplier information from Google Maps scraper.
+ * Read-only for logged-in users (insert/update/delete via service role only).
+ */
+export interface Fornecedor {
+  id: string; // UUID
+  nome: string;
+  dominio?: string | null;
+  endereco?: string | null;
+  servicos?: string[] | null; // Array of service keywords
+  regiao?: string | null;
+  email?: string | null;
+  whatsapp_link?: string | null;
+  whatsapp_numero?: string | null;
+  data_extracao: string; // ISO 8601 timestamp
+  created_at: string; // ISO 8601 timestamp
+  updated_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * Pedido (Request)
+ * Represents a customer request for suppliers in a specific region/service.
+ * Users can read all (shared visibility), but insert/update/delete only their own.
+ */
+export interface Pedido {
+  id: string; // UUID
+  nome: string;
+  servico: string;
+  regiao: string;
+  data?: string | null; // ISO 8601 date
+  local?: string | null;
+  prazo?: string | null;
+  autor_id: string; // UUID, references auth.users
+  created_at: string; // ISO 8601 timestamp
+  updated_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * PedidoFornecedor (Request ↔ Supplier mapping)
+ * Junction table linking requests to suppliers with send status.
+ */
+export interface PedidoFornecedor {
+  id: string; // UUID
+  pedido_id: string; // UUID, references pedidos
+  fornecedor_id: string; // UUID, references fornecedores
+  status: 'pendente' | 'enviado' | 'nao_contatar';
+  created_at: string; // ISO 8601 timestamp
+  updated_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * Modelo (Email Template)
+ * Email template with placeholders for dynamic content.
+ * Users can read all templates (shared visibility), but insert/update only their own.
+ *
+ * Placeholders supported in corpo field:
+ * - {fornecedor} — supplier name
+ * - {servico} — service type
+ * - {evento} — event name
+ * - {data} — event date
+ * - {local} — event location
+ * - {prazo} — deadline
+ */
+export interface Modelo {
+  id: string; // UUID
+  nome: string;
+  corpo: string; // Email body with placeholders
+  criado_por: string; // UUID, references auth.users
+  created_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * Envio (Sent Message)
+ * Record of sent messages (email or WhatsApp) for audit and retry logic.
+ */
+export interface Envio {
+  id: string; // UUID
+  pedido_fornecedor_id: string; // UUID, references pedido_fornecedores
+  canal: 'email' | 'whatsapp';
+  status: 'sucesso' | 'falhou' | 'pendente';
+  mensagem: string; // Message body sent (with {fornecedor} unfilled for audit)
+  data_envio: string; // ISO 8601 timestamp
+  erro?: string | null; // Error message if status=falhou
+  chave_idempotencia: string; // Unique idempotency key to prevent duplicates
+  criado_por: string; // UUID, references auth.users
+  created_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * CredencialGmail (Gmail Credentials)
+ * Encrypted refresh token for Gmail API access per user.
+ *
+ * The credencial_criptografada field stores AES-GCM encrypted data.
+ * Decryption is handled server-side only (via Supabase Edge Functions).
+ * Key is stored in Supabase secrets and never exposed to client.
+ *
+ * Users can only read/write/delete their own credentials (RLS enforced).
+ */
+export interface CredencialGmail {
+  id: string; // UUID
+  usuario_id: string; // UUID, references auth.users (unique per user)
+  credencial_criptografada: Uint8Array; // Encrypted bytes
+  criado_em: string; // ISO 8601 timestamp
+}
+
+/**
+ * User (from auth.users)
+ * Supabase Auth user record. Referenced by foreign keys in pedidos, modelos, envios, credenciais_gmail.
+ */
+export interface User {
+  id: string; // UUID
+  email: string;
+  created_at: string; // ISO 8601 timestamp
+  updated_at: string; // ISO 8601 timestamp
+}
+
+/**
+ * Database row types for Supabase client queries
+ * Used for type-safe database operations
+ */
+export type DbTables = {
+  fornecedores: Fornecedor;
+  pedidos: Pedido;
+  pedido_fornecedores: PedidoFornecedor;
+  modelos: Modelo;
+  envios: Envio;
+  credenciais_gmail: CredencialGmail;
+};
+
+/**
+ * Helper function types for client-side validation
+ */
+
+/**
+ * Check if email belongs to @agenciasurto.com domain
+ * Note: Server-side eh_agencia() function is the authority; this is for client hints only
+ */
+export function isAgenciaEmail(email: string): boolean {
+  return email.toLowerCase().endsWith('@agenciasurto.com');
+}
+
+/**
+ * Validate pedido_fornecedores status
+ */
+export function isValidPedidoFornecedorStatus(
+  status: string
+): status is 'pendente' | 'enviado' | 'nao_contatar' {
+  return ['pendente', 'enviado', 'nao_contatar'].includes(status);
+}
+
+/**
+ * Validate envio canal
+ */
+export function isValidEnvioCanal(canal: string): canal is 'email' | 'whatsapp' {
+  return ['email', 'whatsapp'].includes(canal);
+}
+
+/**
+ * Validate envio status
+ */
+export function isValidEnvioStatus(status: string): status is 'sucesso' | 'falhou' | 'pendente' {
+  return ['sucesso', 'falhou', 'pendente'].includes(status);
+}
+
+/**
+ * Type for RLS context
+ * Represents the current user's security context for RLS enforcement
+ */
+export interface RLSContext {
+  uid: string | null; // auth.uid()
+  email: string | null; // User's email from JWT
+  isAgencia: boolean; // Whether user's email is @agenciasurto.com
+}
+
+/**
+ * Type for query results with RLS consideration
+ */
+export interface QueryResult<T> {
+  data: T[] | null;
+  error: Error | null;
+  count: number | null;
+  status: number;
+  statusText: string;
+}

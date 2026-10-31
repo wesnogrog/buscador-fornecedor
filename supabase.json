@@ -1,0 +1,103 @@
+{
+  "project_id": "",
+  "db": {
+    "major_version": 15
+  },
+  "api": {
+    "enabled": true,
+    "schemas": [
+      "public"
+    ],
+    "extra_search_path": [
+      "public"
+    ],
+    "max_rows": 1000
+  },
+  "auth": {
+    "enabled": true,
+    "email": {
+      "enabled": true,
+      "confirm_email": false,
+      "max_frequency": "24h",
+      "otp_expiry_duration": "24h",
+      "otp_length": 6
+    },
+    "external": {
+      "apple": {
+        "enabled": false
+      },
+      "azure": {
+        "enabled": false
+      },
+      "facebook": {
+        "enabled": false
+      },
+      "github": {
+        "enabled": false
+      },
+      "gitlab": {
+        "enabled": false
+      },
+      "google": {
+        "enabled": false
+      },
+      "keycloak": {
+        "enabled": false
+      },
+      "linkedin": {
+        "enabled": false
+      },
+      "notion": {
+        "enabled": false
+      },
+      "twitch": {
+        "enabled": false
+      },
+      "twitter": {
+        "enabled": false
+      },
+      "discord": {
+        "enabled": false
+      },
+      "okta": {
+        "enabled": false
+      },
+      "kakao": {
+        "enabled": false
+      },
+      "workos": {
+        "enabled": false
+      },
+      "slack": {
+        "enabled": false
+      },
+      "spotify": {
+        "enabled": false
+      }
+    }
+  },
+  "realtime": {
+    "enabled": true,
+    "max_bytes_per_second": 1000000,
+    "max_concurrent_users": 200,
+    "max_message_size": 65536
+  },
+  "storage": {
+    "enabled": true,
+    "file_size_limit": 52428800,
+    "s3": {
+      "enabled": false
+    }
+  },
+  "vector": {
+    "enabled": false
+  },
+  "functions": [
+    {
+      "verify_jwt": false,
+      "import_map": ""
+    }
+  ],
+  "migration_warning_threshold": 100,
+  "name": "Buscador de Fornecedor"
+}
