@@ -73,6 +73,10 @@ A lista ordena primeiro quem tem e-mail e WhatsApp, depois quem tem um dos dois.
 
 O app descarta endereços como `noreply@` e textos com formato de e-mail em códigos ou nomes de imagens. Em cada site, ele lê no máximo três páginas: a inicial e até duas de contato.
 
+### Status da cota
+
+Todas as telas mostram para todo o time quantas buscas ainda restam, por exemplo: "Buscas restantes hoje: 18 de 32". O número cai a cada busca ou "carregar mais", de qualquer pessoa, e renova entre 4h e 5h de Brasília, que é a [meia-noite do Pacífico usada pelo Google](https://docs.cloud.google.com/docs/quotas/overview). Se restar menos no mês do que no dia, o status mostra o número do mês. Não há limite por pessoa.
+
 ## Dados
 
 O banco guarda o identificador do Google e os dados próprios da agência, mas nunca nome, endereço, telefone, nota ou site vindos do Google. Os [termos da plataforma](https://cloud.google.com/maps-platform/terms) proíbem copiar e salvar nomes e endereços, e os [termos específicos](https://cloud.google.com/maps-platform/terms/maps-service-terms) permitem guardar o `place_id`.
@@ -84,7 +88,7 @@ O banco guarda o identificador do Google e os dados próprios da agência, mas n
 | `fornecedor_contatos` | `place_id`, nome, e-mail e WhatsApp encontrados no site, data da verificação e marca "não contatar" |
 | `modelos` | Textos reutilizáveis, com os campos ainda sem preencher |
 | `envios` | Canal, autor, data, situação e modelo usado, com `{fornecedor}` sem preencher |
-| `cota_mensal` | Consultas usadas por mês e por faixa de preço da API |
+| `cota_uso` | Consultas usadas por dia do Google e por faixa de preço da API |
 | `credenciais_gmail` | Credencial criptografada de cada pessoa |
 
 **Consultado de novo:** ao reabrir um pedido, o app não faz nenhuma consulta. Ele mostra o nome publicado no site do fornecedor, o domínio, os contatos e a situação. Fornecedores sem site aparecem com o botão "ver dados", que faz uma consulta na faixa Pro. O telefone vem na faixa Enterprise, só quando a pessoa clica no botão de WhatsApp e o número não veio do site. Logo depois de uma busca, os dados já estão na memória da tela e não geram nova consulta.
@@ -118,7 +122,7 @@ Uma falha em um fornecedor nunca interrompe os demais, e nenhum erro apaga o tex
 | Situação | O que o app faz |
 | --- | --- |
 | Cota de busca perto do fim | Avisa a partir de 80% e bloqueia ao atingir o limite. Pedidos salvos e contatos do site continuam disponíveis |
-| Limite diário do Google atingido | Informa que novas consultas voltam no dia seguinte. O botão de WhatsApp fica indisponível quando depende de uma consulta |
+| Limite diário do Google atingido | Zera o status e informa que novas consultas voltam entre 4h e 5h de Brasília. O botão de WhatsApp fica indisponível quando depende de uma consulta |
 | Site lento ou fora do ar | Desiste depois de 8 segundos por página e mostra o que tiver |
 | Falha ao enviar um e-mail | Marca o envio como "falhou", mostra o motivo e permite tentar de novo |
 | E-mail devolvido | A devolução chega no Gmail da pessoa, que marca o contato como inválido no app |
@@ -145,7 +149,7 @@ Só contas do domínio da agência acessam o app, e todas as chaves ficam no ser
 
 A entrega depende de testes automáticos sem custo e de uma validação real com o time.
 
-- **Automáticos:** extração de e-mails e WhatsApp, classificação de telefones, preenchimento de modelos, contador de cota, reabertura de pedido sem nenhuma consulta ao Google, bloqueio de envio repetido e bloqueio de "não contatar".
+- **Automáticos:** extração de e-mails e WhatsApp, classificação de telefones, preenchimento de modelos, contador de cota, virada do dia no horário do Pacífico, reabertura de pedido sem nenhuma consulta ao Google, bloqueio de envio repetido e bloqueio de "não contatar".
 - **Integração:** Google e Gmail simulados, para não gastar cota nem enviar e-mails reais.
 - **Banco:** as regras de acesso recusam quem não está logado ou é de outro domínio. Uma verificação confirma que nenhuma tabela tem nome, endereço ou telefone do Google.
 - **Teste real controlado:** limites diários conferidos no painel do Google e poucas buscas, com envios apenas para endereços da própria agência e uma abertura real do link do WhatsApp em celular e computador.
