@@ -11,9 +11,349 @@
  * on mobile and desktop browsers.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { generateWhatsAppUrl } from '../utils/whatsapp';
+import { WhatsAppButton } from '../components/WhatsAppButton';
 import type { Fornecedor } from '../utils/types';
+
+describe('WhatsAppButton Component', () => {
+  describe('Basic Rendering', () => {
+    it('should render button with correct label', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Olá! Procuro fornecedor"
+          label="WhatsApp 💬"
+        />
+      );
+
+      const button = screen.getByText('WhatsApp 💬');
+      expect(button).toBeInTheDocument();
+    });
+
+    it('should render default label when not provided', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Olá! Procuro fornecedor"
+        />
+      );
+
+      const button = screen.getByText('WhatsApp');
+      expect(button).toBeInTheDocument();
+    });
+
+    it('should render as anchor element with correct href', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test message"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('href', expect.stringContaining('https://wa.me/5511999887766'));
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+  });
+
+  describe('Props Handling', () => {
+    it('should generate correct wa.me URL with phone and message', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Olá! Como você está?"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('https://wa.me/5511999887766');
+      expect(link.href).toContain('?text=');
+      expect(link.href).toContain('Como%20voc%C3%AA%20est%C3%A1');
+    });
+
+    it('should handle phone number with formatting characters', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="(55) 11 99988-7766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('5511999887766');
+    });
+
+    it('should apply custom className', () => {
+      const { container } = render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          className="custom-class"
+        />
+      );
+
+      const link = container.querySelector('.custom-class');
+      expect(link).toBeInTheDocument();
+    });
+
+    it('should set aria-label correctly', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          supplierName="Test Supplier"
+          ariaLabel="Contact supplier via WhatsApp"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('aria-label', 'Contact supplier via WhatsApp');
+    });
+
+    it('should use default aria-label with supplier name', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          supplierName="Catering Delícia"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('aria-label', expect.stringContaining('Catering Delícia'));
+    });
+
+    it('should set title attribute', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          title="Open WhatsApp chat"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('title', 'Open WhatsApp chat');
+    });
+
+    it('should use default title when not provided', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('title', 'Open WhatsApp conversation');
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should have proper semantic HTML structure', () => {
+      const { container } = render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          supplierName="Test Supplier"
+        />
+      );
+
+      const link = container.querySelector('a');
+      expect(link).toBeInTheDocument();
+      expect(link?.textContent).toBeTruthy();
+    });
+
+    it('should have aria-label for screen readers', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          supplierName="Test Supplier"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAccessibleName(expect.stringContaining('Test Supplier'));
+    });
+
+    it('should have noopener and noreferrer for security', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+  });
+
+  describe('Message Encoding', () => {
+    it('should handle special characters in message', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Olá! Procuro serviço de catering & decoração"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('%C3%A1'); // á
+      expect(link.href).toContain('%26'); // &
+    });
+
+    it('should encode emoji in message', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Olá! 👋 Como você está? 😊"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      // URL should be longer due to emoji encoding
+      expect(link.href.length).toBeGreaterThan('https://wa.me/5511999887766?text='.length);
+    });
+
+    it('should encode newlines in message', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Line 1\nLine 2\nLine 3"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('%0A');
+    });
+
+    it('should handle multi-line formatted message', () => {
+      const message = `Olá Catering Delícia!
+
+Procuro fornecedor de catering para evento em SP.
+Data: 15/11/2024
+
+Poderia me passar informações?`;
+
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message={message}
+          supplierName="Catering Delícia"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('%0A');
+      expect(link.href).toContain('Catering%20Delicia');
+    });
+  });
+
+  describe('Click Behavior', () => {
+    it('should call onClick callback when provided', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+          onClick={onClick}
+        />
+      );
+
+      const link = screen.getByRole('link');
+      await user.click(link);
+
+      expect(onClick).toHaveBeenCalled();
+    });
+
+    it('should open link in new tab', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.target).toBe('_blank');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle empty message gracefully', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message=""
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      // URL should not have ?text parameter if message is empty
+      expect(link.href).toBe('https://wa.me/5511999887766/');
+    });
+
+    it('should handle very long message', () => {
+      const longMessage = 'A'.repeat(1000);
+
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message={longMessage}
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href.length).toBeGreaterThan(1000);
+    });
+
+    it('should handle phone number with + prefix', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="+5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      expect(link.href).toContain('5511999887766');
+    });
+
+    it('should render with minimal props', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link');
+      expect(link).toBeInTheDocument();
+      expect(link).toHaveAttribute('href');
+    });
+
+    it('should handle missing optional supplierName', () => {
+      render(
+        <WhatsAppButton
+          phoneNumber="5511999887766"
+          message="Test"
+        />
+      );
+
+      const link = screen.getByRole('link') as HTMLAnchorElement;
+      // Should still have aria-label, just without supplier name
+      expect(link).toHaveAttribute('aria-label', 'Contact undefined via WhatsApp');
+    });
+  });
+});
 
 describe('WhatsApp Utils: generateWhatsAppUrl()', () => {
   describe('Basic URL Generation', () => {

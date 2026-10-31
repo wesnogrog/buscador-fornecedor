@@ -11,6 +11,8 @@ import {
   indicatorColors,
   indicatorIcons,
 } from '../utils/indicators';
+import { WhatsAppButton } from './WhatsAppButton';
+import { formatSupplierMessage } from '../utils/whatsapp';
 
 interface SupplierCardProps {
   supplier: Fornecedor;
@@ -91,24 +93,23 @@ export function SupplierCard({
               </a>
             )}
 
-            {/* WhatsApp Link */}
-            {supplier.whatsapp_link && (
-              <a
-                href={supplier.whatsapp_link}
-                target="_blank"
-                rel="noopener noreferrer"
+            {/* WhatsApp Button Component */}
+            {(supplier.whatsapp_link || supplier.whatsapp_numero) && (
+              <WhatsAppButton
+                phoneNumber={
+                  supplier.whatsapp_numero ||
+                  (supplier.whatsapp_link ? supplier.whatsapp_link.replace(/\D/g, '') : '')
+                }
+                message={formatSupplierMessage(
+                  supplier.nome,
+                  supplier.servicos?.[0] || 'serviço',
+                  supplier.regiao
+                )}
+                supplierName={supplier.nome}
+                label="WhatsApp 💬"
                 className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded hover:bg-green-100 transition-colors"
-                title="Open WhatsApp"
-              >
-                WhatsApp 💬
-              </a>
-            )}
-
-            {/* WhatsApp Number */}
-            {supplier.whatsapp_numero && !supplier.whatsapp_link && (
-              <span className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded">
-                {supplier.whatsapp_numero}
-              </span>
+                ariaLabel={`Contact ${supplier.nome} via WhatsApp`}
+              />
             )}
           </div>
 
